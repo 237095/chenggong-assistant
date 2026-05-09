@@ -14,8 +14,6 @@ ENV/
 .vscode/
 .idea/
 
-# Streamlit
-.streamlit/secrets.toml
 
 # 敏感文件
 *.key
