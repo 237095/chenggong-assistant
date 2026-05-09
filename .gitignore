@@ -1,0 +1,33 @@
+ 
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# 敏感文件
+*.key
+*.pem
+*.crt
+.env
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 打包文件
+build/
+dist/
+*.spec
