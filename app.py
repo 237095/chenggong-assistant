@@ -21,17 +21,8 @@ except ImportError:
     SEARCH_AVAILABLE = False
 
 # ========== 配置 ==========
-# 安全读取 API Key
-try:
-    DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
-except:
-    DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-
+DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
-
-# 如果没有 API Key，显示警告
-if not DEEPSEEK_API_KEY:
-    st.warning("⚠️ 未配置 API Key，请在 .streamlit/secrets.toml 中设置 DEEPSEEK_API_KEY")
 
 # 初始化 OpenAI 客户端
 client = OpenAI(
