@@ -383,14 +383,26 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 官网入口
-    if st.button("🏫 访问学校官网", use_container_width=True):
-        import webbrowser
-        webbrowser.open(SCHOOL_OFFICIAL_URL)
-        st.success("正在跳转学校官网...")
+    # 官网入口（可点击链接）
+    st.markdown(f"""
+    <div style="text-align: center; margin: 10px 0;">
+        <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
+            display: inline-block;
+            width: 100%;
+            background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        ">🏫 访问学校官网</a>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("---")
-    
     # 功能设置
     st.markdown("### ⚙️ 设置")
     enable_thinking = st.toggle("🧠 深度思考模式", value=False, help="开启后AI会展示思考过程")
