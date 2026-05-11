@@ -21,9 +21,17 @@ except ImportError:
     SEARCH_AVAILABLE = False
 
 # ========== 配置 ==========
-DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
+# 安全读取 API Key
+try:
+    DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
+except:
+    DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
+# 如果没有 API Key，显示警告
+if not DEEPSEEK_API_KEY:
+    st.warning("⚠️ 未配置 API Key，请在 .streamlit/secrets.toml 中设置 DEEPSEEK_API_KEY")
 
 # 初始化 OpenAI 客户端
 client = OpenAI(
@@ -35,6 +43,7 @@ client = OpenAI(
 SCHOOL_NAME = "成都工业职业技术学院"
 SCHOOL_SHORT = "成工职院"
 SCHOOL_MOTTO = "立德树人 精工强技"
+SCHOOL_OFFICIAL_URL = "https://www.cdivtc.edu.cn"  
 
 # 页面配置
 st.set_page_config(
@@ -89,7 +98,14 @@ LOCAL_RESPONSES = {
     "选课": "📖 选课时间：预选第18周，正选开学前1周",
     "宿舍": "🏠 宿舍报修：公众号「成工后勤」在线报修",
     "奖学金": "🏆 国家奖学金8000元，申请时间每年9月",
-    "你好": "你好呀！我是成工职小助手，有什么可以帮你的？😊"
+    "你好": "你好呀！我是成工职小助手，有什么可以帮你的？😊",
+    
+    # ===== 官网相关 =====
+    "官网": f"🌐 **成都工业职业技术学院官方网站**\n\n👉 [点击访问]({SCHOOL_OFFICIAL_URL})\n\n查通知、看新闻、了解学校动态，都可以在这里找到。",
+    "官方网站": f"🌐 官方网站：{SCHOOL_OFFICIAL_URL}",
+    "学校官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
+    "学校网站": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
+    "学校网址": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
 }
 
 def get_local_response(question):
@@ -196,7 +212,6 @@ st.markdown("""
     }
     
     /* 功能卡片 */
-   /* 功能卡片 */
     .feature-card {
         background: rgba(26, 77, 140, 0.8);
         padding: 1rem;
@@ -366,7 +381,14 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    
+    # 官网入口
+    if st.button("🏫 访问学校官网", use_container_width=True):
+        import webbrowser
+        webbrowser.open(SCHOOL_OFFICIAL_URL)
+        st.success("正在跳转学校官网...")
+    
     st.markdown("---")
     
     # 功能设置
@@ -497,12 +519,13 @@ quick_questions = [
     "🍽️ 食堂有什么好吃的？",
     "💻 用Python写一个猜数字游戏",
     "📊 生成一个成绩表格",
-    "🎨 帮我写一个图片生成提示词"
+    "🎨 帮我写一个图片生成提示词",
+    "🏫 学校官网",
 ]
 
 cols = st.columns(5)
 for i, q in enumerate(quick_questions):
-    with cols[i]:
+    with cols[i % 5]:
         if st.button(q, key=f"quick_{i}", use_container_width=True):
             st.session_state.messages.append({"role": "user", "content": q})
             
@@ -514,7 +537,6 @@ for i, q in enumerate(quick_questions):
                 
                 # 智能处理不同问题类型
                 if "Python" in q or "代码" in q or "写" in q:
-                    # 代码生成 - 真正的AI生成
                     code_prompt = f"""请根据以下需求生成完整的、可运行的代码：
 
 需求：{q}
@@ -531,7 +553,6 @@ for i, q in enumerate(quick_questions):
                     if response is None:
                         response = "```python\n# AI服务暂时不可用，请稍后重试\n```"
                 elif "表格" in q or "成绩" in q:
-                    # 表格生成
                     table_prompt = f"""请根据以下需求生成一个Markdown格式的表格：
 
 需求：{q}
@@ -591,7 +612,6 @@ with st.form(key="chat_form", clear_on_submit=True):
             
             # ===== 代码生成（真正由AI生成）=====
             if any(word in user_lower for word in ["python", "java", "html", "css", "javascript", "sql", "代码", "写一个", "编写", "编程"]):
-                # 构建专门的代码生成提示
                 code_prompt = f"""请根据以下需求生成完整的、可运行的代码：
 
 需求：{user_input}
