@@ -196,20 +196,23 @@ st.markdown("""
     }
     
     /* 功能卡片 */
+   /* 功能卡片 */
     .feature-card {
-        background: white;
+        background: rgba(26, 77, 140, 0.8);
         padding: 1rem;
         border-radius: 15px;
         margin: 10px 0;
         border-left: 4px solid #e8a020;
+        color: white;
     }
     .function-card {
-        background: white;
+        background: rgba(26, 77, 140, 0.8);
         padding: 1rem;
         border-radius: 15px;
         margin: 0.5rem 0;
-        border: 1px solid #e0e0e0;
+        border: 1px solid rgba(255,255,255,0.2);
         text-align: center;
+        color: white;
     }
     
     /* 侧边栏元素 */
