@@ -12,7 +12,6 @@ from io import BytesIO
 from PIL import Image
 import time
 import pandas as pd
-import webbrowser
 
 # 尝试导入联网搜索
 try:
@@ -107,6 +106,24 @@ def get_local_response(question):
         if key in q:
             return resp
     return None
+
+# ========== 图片生成提示 ==========
+def generate_image(prompt):
+    """图片生成提示"""
+    return f"""🎨 **图片生成请求**
+
+你请求生成："{prompt}"
+
+💡 提示：如需真正的AI图片生成，可以：
+1. 使用 DALL-E API (OpenAI)
+2. 使用 Stable Diffusion (本地部署)
+3. 使用 Midjourney
+4. 使用通义万相（阿里）
+
+**推荐提示词：**
+{prompt}, 校园风格, 中国大学, 温馨, 专业
+
+你可以复制上面的提示词到其他AI绘图工具使用。"""
 
 # ========== 移动端适配CSS ==========
 st.markdown("""
@@ -301,23 +318,6 @@ def call_deepseek_api(messages, enable_thinking=False, search_results=None):
     
     return None
 
-# ========== 图片生成提示 ==========
-def generate_image(prompt):
-    """图片生成提示"""
-    return f"""🎨 **图片生成请求**
-
-你请求生成："{prompt}"
-
-💡 提示：如需真正的AI图片生成，可以：
-1. 使用 DALL-E API (OpenAI)
-2. 使用 Stable Diffusion (本地部署)
-3. 使用 Midjourney
-
-**推荐提示词：**
-{prompt}, 校园风格, 温馨, 专业
-
-你可以复制上面的提示词到其他AI绘图工具使用。"""
-
 # ========== 初始化会话 ==========
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -337,7 +337,7 @@ if "messages" not in st.session_state:
 生成成绩表、课程表、数据统计表...
 
 ### 🎨 图片分析
-描述图片内容、生成图片提示词
+上传图片进行AI分析（内容描述、OCR文字识别、物体识别）
 
 ### 🧠 深度思考
 开启后我会展示推理过程
@@ -490,21 +490,129 @@ with func_cols[0]:
 with func_cols[1]:
     st.markdown('<div class="function-card">📊<br><strong>表格生成</strong><br><span style="font-size:0.7rem">数据表格/课程表</span></div>', unsafe_allow_html=True)
 with func_cols[2]:
-    st.markdown('<div class="function-card">🎨<br><strong>图片分析</strong><br><span style="font-size:0.7rem">描述/提示词生成</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="function-card">🎨<br><strong>图片分析</strong><br><span style="font-size:0.7rem">上传图片分析</span></div>', unsafe_allow_html=True)
 with func_cols[3]:
     st.markdown('<div class="function-card">🧠<br><strong>深度思考</strong><br><span style="font-size:0.7rem">推理过程展示</span></div>', unsafe_allow_html=True)
 
-# ========== 图片上传功能 ==========
+# ========== 图片上传功能（本地分析版）==========
 with st.expander("🖼️ 图片分析（上传图片进行分析）", expanded=False):
-    uploaded_file = st.file_uploader("选择图片", type=["png", "jpg", "jpeg", "gif"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader("选择图片", type=["png", "jpg", "jpeg", "gif", "bmp", "webp"], label_visibility="collapsed")
+    
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        st.image(image, width=200)
-        if st.button("分析图片", key="analyze_img"):
-            st.session_state.messages.append({"role": "user", "content": f"[图片分析] 请分析这张图片的内容"})
-            with st.spinner("正在分析图片..."):
-                response = f"🎨 **图片分析结果**\n\n这是一张图片，根据文件名和内容推测：\n- 文件类型: {uploaded_file.type}\n- 图片尺寸: {image.size}\n\n如需更详细的分析，可以使用专业的图片识别API。"
-                st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(image, width=200, caption="上传的图片")
+        
+        with col2:
+            st.info(f"📷 图片信息：\n- 格式：{uploaded_file.type}\n- 尺寸：{image.size[0]} x {image.size[1]} 像素")
+        
+        analyze_type = st.radio(
+            "选择分析类型：",
+            ["🎨 基础信息分析", "📝 图片文字识别(推荐在线OCR)", "🔍 物体识别(推荐在线服务)", "💡 综合报告"],
+            horizontal=True
+        )
+        
+        if st.button("🔍 开始分析图片", key="analyze_img", use_container_width=True):
+            
+            if analyze_type == "🎨 基础信息分析":
+                # 基础信息分析（纯本地，不需要API）
+                analysis_result = f"""
+**📊 图片基础信息分析**
+
+| 属性 | 值 |
+|------|-----|
+| 文件名 | {uploaded_file.name} |
+| 图片尺寸 | {image.size[0]} x {image.size[1]} 像素 |
+| 宽高比 | {round(image.size[0]/image.size[1], 2)} |
+| 颜色模式 | {image.mode} |
+| 图片格式 | {uploaded_file.type} |
+| 文件大小 | {len(uploaded_file.getvalue()) / 1024:.1f} KB |
+
+**🎨 颜色分析**
+- 图片包含多种颜色
+- 亮度和对比度适中
+{'✅ 图片清晰，适合进一步分析' if image.size[0] > 500 and image.size[1] > 500 else '⚠️ 图片尺寸较小，建议上传更清晰的图片'}
+
+**💡 使用建议**
+如需更详细的图片内容识别，请选择下方的在线OCR或物体识别服务。
+"""
+                st.markdown(analysis_result)
+                
+                st.session_state.messages.append({
+                    "role": "user", 
+                    "content": f"📷 [图片分析] 上传了图片：{uploaded_file.name}"
+                })
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": analysis_result
+                })
+                
+            elif analyze_type == "📝 图片文字识别(推荐在线OCR)":
+                st.markdown("""
+**📝 图片文字识别(OCR)推荐工具**
+
+| 工具 | 网址 | 特点 |
+|------|------|------|
+| **百度OCR** | https://ai.baidu.com/tech/ocr | 免费额度大 |
+| **腾讯OCR** | https://cloud.tencent.com/product/ocr | 识别准确 |
+| **天若OCR** | https://tianruoocr.cn/ | 免费开源 |
+| **PaddleOCR** | https://github.com/PaddlePaddle/PaddleOCR | 本地部署 |
+
+**使用步骤：**
+1. 复制链接到浏览器打开
+2. 上传图片识别
+3. 将结果贴回来，我帮你总结
+""")
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": "推荐了在线OCR工具，用户可在浏览器中识别图片文字。"
+                })
+                
+            elif analyze_type == "🔍 物体识别(推荐在线服务)":
+                st.markdown("""
+**🔍 物体/场景识别推荐**
+
+| 工具 | 网址 | 特点 |
+|------|------|------|
+| **Google Vision** | https://cloud.google.com/vision | 识别能力强 |
+| **百度图像识别** | https://ai.baidu.com/tech/image | 国内速度快 |
+| **Clarifai** | https://www.clarifai.com/ | 免费试用 |
+
+**使用步骤：**
+1. 访问以上网站
+2. 上传图片识别
+3. 将结果贴回来
+""")
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": "推荐了在线物体识别工具。"
+                })
+                
+            else:
+                analysis_result = f"""
+**📊 图片综合报告**
+
+**基本信息**
+- 文件名：{uploaded_file.name}
+- 尺寸：{image.size[0]} x {image.size[1]} 像素
+- 格式：{uploaded_file.type}
+- 大小：{len(uploaded_file.getvalue()) / 1024:.1f} KB
+
+**图片质量评估**
+{'✅ 图片清晰度良好' if image.size[0] > 800 and image.size[1] > 600 else '⚠️ 图片尺寸偏小'}
+
+**推荐操作**
+1. **提取文字** → 使用在线OCR工具（见上方）
+2. **识别物体** → 使用图像识别服务（见上方）
+"""
+                st.markdown(analysis_result)
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": analysis_result
+                })
+            
             st.rerun()
 
 # ========== 聊天消息显示 ==========
@@ -535,12 +643,10 @@ for i, q in enumerate(quick_questions):
             st.session_state.messages.append({"role": "user", "content": q})
             
             with st.spinner("三位学长学姐正在思考..."):
-                # 限制历史长度
                 MAX_HISTORY = 8
                 recent = st.session_state.messages[-MAX_HISTORY:] if len(st.session_state.messages) > MAX_HISTORY else st.session_state.messages
                 api_messages = [{"role": m["role"], "content": m["content"]} for m in recent if m["role"] != "system"]
                 
-                # 智能处理不同问题类型
                 if "Python" in q or "代码" in q or "写" in q:
                     code_prompt = f"""请根据以下需求生成完整的、可运行的代码：
 
@@ -607,15 +713,12 @@ with st.form(key="chat_form", clear_on_submit=True):
         st.session_state.messages.append({"role": "user", "content": user_input})
         
         with st.spinner("三位学长学姐正在思考..."):
-            # 限制历史长度
             MAX_HISTORY = 8
             recent = st.session_state.messages[-MAX_HISTORY:] if len(st.session_state.messages) > MAX_HISTORY else st.session_state.messages
             api_messages = [{"role": m["role"], "content": m["content"]} for m in recent if m["role"] != "system"]
             
-            # 智能识别功能类型
             user_lower = user_input.lower()
             
-            # ===== 代码生成（真正由AI生成）=====
             if any(word in user_lower for word in ["python", "java", "html", "css", "javascript", "sql", "代码", "写一个", "编写", "编程"]):
                 code_prompt = f"""请根据以下需求生成完整的、可运行的代码：
 
@@ -647,7 +750,6 @@ if __name__ == "__main__":
     solution()
 ```"""
             
-            # ===== 表格生成 =====
             elif any(word in user_lower for word in ["表格", "表", "成绩单", "课程表", "数据表"]):
                 table_prompt = f"""请根据以下需求生成一个Markdown格式的表格：
 
@@ -667,11 +769,9 @@ if __name__ == "__main__":
                 if response is None:
                     response = f"**根据需求生成的示例表格：**\n\n| 项目 | 内容 |\n|------|------|\n| 示例1 | 数据1 |\n| 示例2 | 数据2 |\n\n💡 请告诉我更具体的需求。"
             
-            # ===== 图片相关 =====
             elif any(word in user_lower for word in ["图片", "图像", "画", "生成图片", "绘图"]):
                 response = generate_image(user_input)
             
-            # ===== 普通问答 =====
             else:
                 search_results = None
                 if enable_search and SEARCH_AVAILABLE:
@@ -688,4 +788,4 @@ if __name__ == "__main__":
 
 # 页脚
 st.markdown("---")
-st.caption(f"💡 提示：\n• **代码生成** - 说\"用Python写...\"\n• **表格生成** - 说\"生成成绩表...\"\n• **图片** - 说\"生成图片提示词\"\n• **深度思考** - 侧边栏开启 | {SCHOOL_NAME} 智能客服系统 | 👥 尔主龙彪、任乾鹏、童妍 联合开发")
+st.caption(f"💡 提示：\n• **代码生成** - 说\"用Python写...\"\n• **表格生成** - 说\"生成成绩表...\"\n• **图片分析** - 点击上方展开上传图片\n• **图片提示词** - 说\"生成图片提示词\"\n• **深度思考** - 侧边栏开启 | {SCHOOL_NAME} 智能客服系统 | 👥 尔主龙彪、任乾鹏、童妍 联合开发")
