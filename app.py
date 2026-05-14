@@ -417,15 +417,39 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 学校官网按钮
-    if st.button("🏫 学校官网", use_container_width=True):
-        import webbrowser
-        webbrowser.open(SCHOOL_OFFICIAL_URL)
+    # 学校官网按钮（HTML链接）
+    st.markdown(f"""
+    <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
+        display: block;
+        width: 100%;
+        background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
+        color: white;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+    ">🏫 学校官网</a>
+    """, unsafe_allow_html=True)
     
-    # 移动教务系统按钮（新增）
-    if st.button("📚 移动教务系统", use_container_width=True):
-        import webbrowser
-        webbrowser.open(COURSE_SYSTEM_URL)
+    # 移动教务系统按钮（HTML链接）
+    st.markdown(f"""
+    <a href="{COURSE_SYSTEM_URL}" target="_blank" style="
+        display: block;
+        width: 100%;
+        background: linear-gradient(135deg, #1a4d8c 0%, #2d6a4f 100%);
+        color: white;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+    ">📚 移动教务系统</a>
+    """, unsafe_allow_html=True)
     
     st.markdown("---")
     
