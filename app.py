@@ -1,6 +1,6 @@
 """
-成工职小助手 - 基于DeepSeek大模型
-成都工业职业技术学院 | 智能AI客服 | 支持移动端 | 多功能增强版
+成工职小助手 - 官网新闻提取版（修复版）
+成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
 import streamlit as st
@@ -12,6 +12,9 @@ from io import BytesIO
 from PIL import Image
 import time
 import pandas as pd
+import random
+import requests
+from bs4 import BeautifulSoup
 
 # 尝试导入联网搜索
 try:
@@ -21,11 +24,9 @@ except ImportError:
     SEARCH_AVAILABLE = False
 
 # ========== 配置 ==========
-# 直接写入 API Key（答辩演示专用）
 DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
-# 初始化 OpenAI 客户端
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url=DEEPSEEK_BASE_URL
@@ -37,7 +38,6 @@ SCHOOL_SHORT = "成工职院"
 SCHOOL_MOTTO = "立德树人 精工强技"
 SCHOOL_OFFICIAL_URL = "https://www.cdivtc.edu.cn"  
 
-# 页面配置
 st.set_page_config(
     page_title=f"{SCHOOL_NAME} - 成工职小助手",
     page_icon="🎓",
@@ -45,7 +45,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# ========== 检查校徽图片 ==========
+# ========== 检查校徽 ==========
 logo_files = ["school_logo.png", "logo.png", "校徽.png", "school_logo.jpg", "logo.jpg"]
 LOGO_PATH = None
 for f in logo_files:
@@ -53,739 +53,430 @@ for f in logo_files:
         LOGO_PATH = f
         break
 
-# ========== System Prompt ==========
-SYSTEM_PROMPT = """你是"成工职小助手"，由三位亲切的学长学姐共同为你服务！
-
-## 👨‍💻 三位学长学姐介绍
-
-### 1. 尔主龙彪学长（项目组长/AI应用工程师）
-- **擅长**：AI技术、编程问题、选课策略、代码生成、图片分析
-- **口头禅**："这个问题我来帮你分析一下..."
-
-### 2. 任乾鹏学长（数据测试工程师）
-- **擅长**：考试复习、数据分析、表格生成、知识库整理
-- **口头禅**："据我整理的数据显示..."
-
-### 3. 童妍学姐（前端开发工程师）
-- **擅长**：校园生活、社团活动、界面设计、创意写作
-- **口头禅**："成工生活我超熟的！"
-
-## 特殊能力
-- **表格生成**：可以生成各种数据表格
-- **代码生成**：可以编写Python、Java、HTML/CSS等代码
-- **图片分析**：可以描述和分析图片内容
-- **深度思考**：复杂问题会展示推理过程
-
-## 回答规则
-1. 根据问题类型，由最擅长的学长/学姐回答
-2. 代码用```语言名```格式展示
-3. 表格用markdown表格格式
-4. 深度思考时展示💭思考过程
-"""
-
-# ========== 本地应急回复 ==========
-LOCAL_RESPONSES = {
-    "图书馆": "📚 图书馆开放时间：周一至周五 8:00-22:00，周末 9:00-21:00",
-    "食堂": "🍽️ 食堂营业时间：早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30",
-    "选课": "📖 选课时间：预选第18周，正选开学前1周",
-    "宿舍": "🏠 宿舍报修：公众号「成工后勤」在线报修",
-    "奖学金": "🏆 国家奖学金8000元，申请时间每年9月",
-    "你好": "你好呀！我是成工职小助手，有什么可以帮你的？😊",
+# ========== 官网新闻提取功能 ==========
+def fetch_news_from_website():
+    """从学校官网提取最新新闻"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        news_urls = [
+            f"{SCHOOL_OFFICIAL_URL}/xwzx/xyyw.htm",
+            f"{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm",
+            f"{SCHOOL_OFFICIAL_URL}/index.htm",
+        ]
+        
+        all_news = []
+        
+        for url in news_urls:
+            try:
+                response = requests.get(url, headers=headers, timeout=10)
+                response.encoding = 'utf-8'
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                for link in soup.find_all('a', href=True):
+                    title = link.get_text(strip=True)
+                    href = link['href']
+                    
+                    if len(title) > 10 and any(word in title for word in ['通知', '公告', '活动', '比赛', '讲座', '招聘', '会议']):
+                        if href.startswith('/'):
+                            href = SCHOOL_OFFICIAL_URL + href
+                        elif not href.startswith('http'):
+                            href = SCHOOL_OFFICIAL_URL + '/' + href
+                        
+                        all_news.append({
+                            'title': title,
+                            'link': href,
+                            'source': url
+                        })
+                        
+                        if len(all_news) >= 8:
+                            break
+            except:
+                continue
+            
+            if len(all_news) >= 8:
+                break
+        
+        return all_news[:6]
     
-    # ===== 官网相关 =====
-    "官网": f"🌐 **成都工业职业技术学院官方网站**\n\n👉 [点击访问]({SCHOOL_OFFICIAL_URL})\n\n查通知、看新闻、了解学校动态，都可以在这里找到。",
-    "官方网站": f"🌐 官方网站：{SCHOOL_OFFICIAL_URL}",
-    "学校官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
-    "学校网站": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
-    "学校网址": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
+    except Exception as e:
+        print(f"新闻提取失败: {e}")
+        return None
+
+def summarize_news_with_ai(news_list, query_type="news"):
+    """使用AI总结新闻内容"""
+    if not news_list:
+        return None
+    
+    news_text = ""
+    for i, news in enumerate(news_list, 1):
+        news_text += f"{i}. 【{news['title']}】\n   链接：{news['link']}\n\n"
+    
+    if query_type == "notice":
+        prompt = f"""请根据以下学校通知公告，帮我总结成简洁的回答：
+
+{news_text}
+
+要求：
+1. 用温暖亲切的语气回答
+2. 列出最重要的3-5条通知
+3. 每条通知用一句话概括
+4. 提醒用户点击链接查看详情
+5. 适当使用表情符号"""
+    else:
+        prompt = f"""请根据以下学校最新新闻，帮我总结成简洁的回答：
+
+{news_text}
+
+要求：
+1. 用温暖亲切的语气回答
+2. 列出最重要的3-5条新闻
+3. 按时间或重要性排序
+4. 提醒用户点击链接查看详情
+5. 适当使用表情符号"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=800,
+            timeout=30
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"AI总结失败: {e}")
+        return None
+
+# ========== 三位学长学姐的人格设定 ==========
+PERSONAS = {
+    "longbiao": {
+        "name": "尔主龙彪",
+        "avatar": "👨‍💻",
+        "title": "AI应用工程师 · 组长",
+        "style": "技术控、逻辑清晰、耐心解答",
+        "greeting": "这个问题我来帮你分析一下...",
+    },
+    "qianpeng": {
+        "name": "任乾鹏",
+        "avatar": "📊",
+        "title": "数据测试工程师",
+        "style": "细心、严谨、数据敏感",
+        "greeting": "据我整理的数据显示...",
+    },
+    "tongyan": {
+        "name": "童妍",
+        "avatar": "👩‍💻",
+        "title": "前端开发工程师",
+        "style": "热情、细心、善于沟通",
+        "greeting": "成工生活我超熟的！",
+    }
 }
 
-def get_local_response(question):
+def select_persona(question):
     q = question.lower()
-    for key, resp in LOCAL_RESPONSES.items():
+    if any(word in q for word in ["python", "java", "html", "代码", "编程", "选课"]):
+        return "longbiao"
+    elif any(word in q for word in ["考试", "复习", "数据", "表格", "成绩"]):
+        return "qianpeng"
+    elif any(word in q for word in ["食堂", "宿舍", "社团", "校园", "生活", "美食"]):
+        return "tongyan"
+    else:
+        return "tongyan"
+
+def get_persona_prefix(persona_key):
+    persona = PERSONAS[persona_key]
+    return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
+
+# ========== System Prompt ==========
+def get_system_prompt(persona_key):
+    persona = PERSONAS[persona_key]
+    return f"""你是"{SCHOOL_NAME}的成工职小助手"，你是{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}。
+
+## 你的人格特质
+- {persona['style']}
+- 说话温暖、亲切
+
+## 回答要求
+1. 用温暖亲切的语气
+2. 重要信息用**加粗**标注
+3. 适当使用表情符号"""
+
+# ========== 本地知识库 ==========
+LOCAL_KNOWLEDGE = {
+    "图书馆": "📚 图书馆开放时间：周一至周五 8:00-22:00，周末 9:00-21:00",
+    "食堂": "🍽️ 食堂营业时间：早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n\n🍜 推荐：二食堂牛肉面",
+    "选课": "📅 选课时间：预选第18周，正选开学前1周，补退选开学第1周",
+    "宿舍": "🔧 宿舍报修：公众号「成工后勤」或联系楼栋管理员",
+    "校园卡": "💳 充值方式：微信公众号、支付宝、食堂自助机",
+    "奖学金": "🏆 国家奖学金8000元，申请时间每年9月",
+    "校医院": "🏥 24小时值班，急诊电话：1200",
+    "官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
+}
+
+def get_local_answer(question):
+    q = question.lower()
+    for key, answer in LOCAL_KNOWLEDGE.items():
         if key in q:
-            return resp
+            return answer
     return None
 
-# ========== 图片生成提示 ==========
-def generate_image(prompt):
-    """图片生成提示"""
-    return f"""🎨 **图片生成请求**
-
-你请求生成："{prompt}"
-
-💡 提示：如需真正的AI图片生成，可以：
-1. 使用 DALL-E API (OpenAI)
-2. 使用 Stable Diffusion (本地部署)
-3. 使用 Midjourney
-4. 使用通义万相（阿里）
-
-**推荐提示词：**
-{prompt}, 校园风格, 中国大学, 温馨, 专业
-
-你可以复制上面的提示词到其他AI绘图工具使用。"""
-
-# ========== 移动端适配CSS ==========
-st.markdown("""
-<style>
-    .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    
-    /* 移动端适配 */
-    @media (max-width: 768px) {
-        .main-header {
-            padding: 1rem !important;
-        }
-        .school-title h1 {
-            font-size: 1.2rem !important;
-        }
-        .logo-placeholder {
-            width: 50px !important;
-            height: 50px !important;
-        }
-        .stButton > button {
-            padding: 0.4rem 0.8rem !important;
-            font-size: 0.8rem !important;
-            min-height: 44px !important;
-        }
-        .stTextInput > div > div > input {
-            padding: 0.6rem 0.8rem !important;
-            font-size: 0.9rem !important;
-            min-height: 44px !important;
-        }
-        .function-card {
-            padding: 0.8rem !important;
-        }
-        .sidebar-title h3 {
-            font-size: 1rem !important;
-        }
-    }
-    
-    /* 桌面端样式 */
-    .main-header {
-        background: linear-gradient(135deg, #1a4d8c 0%, #2d6a4f 100%);
-        padding: 2rem;
-        border-radius: 20px;
-        margin-bottom: 2rem;
-    }
-    .school-header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 20px;
-        flex-wrap: wrap;
-    }
-    .logo-placeholder {
-        width: 80px;
-        height: 80px;
-        background: white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-    }
-    .school-title {
-        text-align: center;
-    }
-    .school-title h1 {
-        color: white;
-        font-size: 2rem;
-        margin: 0;
-    }
-    .motto {
-        color: #e8a020;
-        font-style: italic;
-        margin-top: 8px;
-    }
-    
-    /* 侧边栏 */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a4d8c 0%, #0d3b66 100%);
-        color: white;
-    }
-    
-    /* 按钮 */
-    .stButton > button {
-        background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
-        color: white;
-        border: none;
-        border-radius: 25px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    .stButton > button:hover {
-        transform: scale(1.02);
-        opacity: 0.9;
-    }
-    
-    /* 功能卡片 */
-    .feature-card {
-        background: rgba(26, 77, 140, 0.8);
-        padding: 1rem;
-        border-radius: 15px;
-        margin: 10px 0;
-        border-left: 4px solid #e8a020;
-        color: white;
-    }
-    .function-card {
-        background: rgba(26, 77, 140, 0.8);
-        padding: 1rem;
-        border-radius: 15px;
-        margin: 0.5rem 0;
-        border: 1px solid rgba(255,255,255,0.2);
-        text-align: center;
-        color: white;
-    }
-    
-    /* 侧边栏元素 */
-    .sidebar-logo {
-        text-align: center;
-        padding: 1rem;
-    }
-    .sidebar-title {
-        text-align: center;
-        margin-top: 1rem;
-    }
-    .sidebar-title h3 {
-        color: white;
-        margin: 0;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ========== 联网搜索功能 ==========
-def search_online(query, max_results=3):
+# ========== 联网搜索 ==========
+def search_online(query, max_results=2):
     if not SEARCH_AVAILABLE:
         return None
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
-            if results:
-                search_results = []
-                for r in results:
-                    search_results.append({
-                        "title": r.get('title', ''),
-                        "body": r.get('body', '')[:300],
-                        "link": r.get('href', '')
-                    })
-                return search_results
-    except Exception as e:
-        print(f"搜索失败: {e}")
-    return None
+            return [{"title": r['title'], "body": r['body'][:300]} for r in results]
+    except:
+        return None
 
-# ========== DeepSeek API 调用 ==========
-def call_deepseek_api(messages, enable_thinking=False, search_results=None):
-    """调用 DeepSeek API，支持深度思考"""
+# ========== AI 调用 ==========
+def call_deepseek(messages, persona_key, use_thinking=False, search_context=None):
+    full_messages = [{"role": "system", "content": get_system_prompt(persona_key)}]
     
-    full_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if use_thinking:
+        full_messages.append({"role": "user", "content": "请先展示你的💭思考过程，再给出最终答案。"})
     
-    # 添加深度思考提示
-    if enable_thinking:
-        thinking_hint = "请展示你的思考过程，用💭标记，然后给出最终答案。"
-        full_messages.append({"role": "user", "content": thinking_hint})
-    
-    if search_results:
-        search_context = "以下是联网搜索到的相关信息：\n\n"
-        for r in search_results[:2]:
-            search_context += f"- {r['title']}: {r['body'][:200]}\n"
-        full_messages.append({"role": "user", "content": search_context})
+    if search_context:
+        full_messages.append({"role": "user", "content": f"参考信息：\n{search_context}"})
     
     full_messages.extend(messages)
     
-    # 重试机制
-    for attempt in range(3):
-        try:
-            params = {
-                "model": "deepseek-chat",
-                "messages": full_messages,
-                "temperature": 0.7,
-                "max_tokens": 2000 if enable_thinking else 1200,
-                "stream": False,
-                "timeout": 45
-            }
-            
-            response = client.chat.completions.create(**params)
-            return response.choices[0].message.content
-            
-        except Exception as e:
-            print(f"API调用失败 (尝试 {attempt+1}/3): {e}")
-            if attempt == 2:
-                return None
-            time.sleep(2)
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=full_messages,
+            temperature=0.8,
+            max_tokens=1500,
+            timeout=30
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"API调用失败: {e}")
+        return None
+
+# ========== 核心回复函数（已修复官网链接）==========
+def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
+    lower = user_input.lower()
     
-    return None
+    # ===== 官网链接查询（最高优先级）=====
+    if any(word in lower for word in ["官网链接", "官网地址", "学校官网", "学校网站", "学校网址"]):
+        return f"🌐 {SCHOOL_NAME}官方网站：\n\n{SCHOOL_OFFICIAL_URL}\n\n你可以点击访问了解学校最新动态、通知公告、招生就业等信息~"
+    
+    # ===== 官网新闻/通知提取 =====
+    if any(word in lower for word in ["新闻", "通知", "公告", "最新", "最近", "有什么活动", "学校有什么", "校园新闻", "近期活动", "学校动态"]):
+        # 排除纯官网查询
+        if "官网" not in lower or ("新闻" in lower or "通知" in lower):
+            with st.spinner("正在从官网获取最新信息..."):
+                news = fetch_news_from_website()
+                if news:
+                    summarized = summarize_news_with_ai(news, "news")
+                    if summarized:
+                        return f"🔍 我从学校官网找到了这些最新信息：\n\n{summarized}\n\n---\n📌 以上信息来自学校官网，更多详情请点击链接查看~"
+                    else:
+                        news_text = "📢 学校官网最新动态：\n\n"
+                        for n in news:
+                            news_text += f"• {n['title']}\n  链接：{n['link']}\n\n"
+                        return news_text
+                else:
+                    return f"抱歉，暂时无法获取官网信息。你可以直接访问学校官网：\n\n{SCHOOL_OFFICIAL_URL}"
+    
+    # ===== 代码生成 =====
+    if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
+        full_prompt = f"请生成完整的代码：{user_input}\n要求：完整、有注释、可运行，用```语言名```格式。"
+        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
+        return response if response else "代码生成暂时不可用"
+    
+    # ===== 表格生成 =====
+    elif any(w in lower for w in ["表格", "表", "成绩单", "课程表"]):
+        full_prompt = f"请生成Markdown表格：{user_input}\n要求：标准格式，包含列名和示例数据。"
+        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
+        return response if response else "表格生成暂时不可用"
+    
+    # ===== 普通问答 =====
+    else:
+        search_ctx = None
+        if enable_search and SEARCH_AVAILABLE:
+            sr = search_online(user_input)
+            if sr:
+                search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
+        
+        response = call_deepseek([{"role": "user", "content": user_input}], persona_key, enable_thinking, search_ctx)
+        
+        if response:
+            return response
+        else:
+            local = get_local_answer(user_input)
+            return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 学校有什么新闻？\n- 用Python写一个计算器"
+
+# ========== CSS 样式 ==========
+st.markdown("""
+<style>
+    #MainMenu, header, footer {visibility: hidden;}
+    .stApp {background: #fafafc;}
+    
+    .main .block-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 1rem 1rem 5rem 1rem;
+    }
+    
+    [data-testid="stChatMessage"] {
+        margin-bottom: 0.5rem;
+    }
+    
+    [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
+        padding: 12px 18px;
+        border-radius: 20px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        word-wrap: break-word;
+    }
+    
+    [data-testid="stChatMessage"][data-testid="user"] [data-testid="stMarkdown"] {
+        background: linear-gradient(135deg, #1a4d8c 0%, #2d6a4f 100%);
+        color: white;
+        border-radius: 20px 20px 5px 20px;
+    }
+    
+    [data-testid="stChatMessage"][data-testid="assistant"] [data-testid="stMarkdown"] {
+        background: white;
+        color: #1e1e2f;
+        border-radius: 20px 20px 20px 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    .stChatInput {
+        position: sticky;
+        bottom: 0;
+        background: #fafafc;
+        padding-top: 8px;
+        z-index: 100;
+    }
+    
+    .stChatInput textarea {
+        border-radius: 28px !important;
+        border: 1px solid #e0e0e0 !important;
+        padding: 12px 20px !important;
+    }
+    
+    [data-testid="stSidebar"] {
+        background: #ffffff;
+        border-right: 1px solid #e6e6e6;
+    }
+    
+    pre {
+        background: #1e1e2e;
+        border-radius: 12px;
+        padding: 12px;
+        overflow-x: auto;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ========== 侧边栏 ==========
+with st.sidebar:
+    if LOGO_PATH:
+        try:
+            st.image(Image.open(LOGO_PATH), width=100)
+        except:
+            st.markdown("## 🎓")
+    else:
+        st.markdown("## 🎓")
+    
+    st.markdown(f"### {SCHOOL_NAME}")
+    st.markdown(f"*{SCHOOL_MOTTO}*")
+    st.markdown("---")
+    
+    enable_thinking = st.toggle("🧠 深度思考模式", value=False)
+    enable_search = st.toggle("🌐 联网搜索", value=False)
+    
+    st.markdown("---")
+    
+    if st.button("🏫 学校官网", use_container_width=True):
+        import webbrowser
+        webbrowser.open(SCHOOL_OFFICIAL_URL)
+    
+    if st.button("🗑️ 清空对话", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 👥 开发团队")
+    st.markdown("- 尔主龙彪（组长）")
+    st.markdown("- 任乾鹏")
+    st.markdown("- 童妍")
+    
+    st.caption(f"© {SCHOOL_NAME}")
 
 # ========== 初始化会话 ==========
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    welcome_msg = f"""**你好呀！** 👋
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": """# 🎓 成工职小助手
 
-我们是**{SCHOOL_NAME}的成工职小助手**团队！
+你好呀！我是由三位学长学姐共同组成的AI助手：
 
-## ✨ 我能帮你做什么？
-
-### 📚 校园问答
-图书馆、食堂、选课、宿舍、奖学金...
-
-### 💻 代码生成
-用Python写一个计算器、用HTML写一个网页...
-
-### 📊 表格生成
-生成成绩表、课程表、数据统计表...
-
-### 🎨 图片分析
-上传图片进行AI分析（内容描述、OCR文字识别、物体识别）
-
-### 🧠 深度思考
-开启后我会展示推理过程
+- 👨‍💻 **尔主龙彪学长**：AI、编程、选课
+- 📊 **任乾鹏学长**：数据分析、表格
+- 👩‍💻 **童妍学姐**：校园生活、社团
 
 ---
 
-💡 **试试问我：**
-- "用Python写一个计算器"
-- "生成一个课程表"
+**试试问我：**
 - "图书馆几点开门？"
-- "给我学习建议"
-
-有什么问题尽管问，我们都会用心回答！😊"""
-    
-    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
-
-# ========== 侧边栏 ==========
-with st.sidebar:
-    st.markdown('<div class="sidebar-logo">', unsafe_allow_html=True)
-    
-    if LOGO_PATH and os.path.exists(LOGO_PATH):
-        try:
-            logo = Image.open(LOGO_PATH)
-            st.image(logo, width=80)
-        except:
-            st.markdown('<div style="font-size: 3rem; background: white; width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">🎓</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div style="font-size: 3rem; background: white; width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">🎓</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="sidebar-title">
-        <h3>成工职小助手</h3>
-        <p>成都工业职业技术学院</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # 官网入口（可点击链接）
-    st.markdown(f"""
-    <div style="text-align: center; margin: 10px 0;">
-        <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
-            display: inline-block;
-            width: 100%;
-            background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            font-weight: bold;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-        ">🏫 访问学校官网</a>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    # 功能设置
-    st.markdown("### ⚙️ 设置")
-    enable_thinking = st.toggle("🧠 深度思考模式", value=False, help="开启后AI会展示思考过程")
-    enable_search = st.toggle("🌐 联网搜索", value=False, help="开启后可以搜索最新信息")
-    
-    st.markdown("---")
-    
-    # 团队成员卡片
-    st.markdown("""
-    <div class="feature-card">
-        <strong>👥 开发团队</strong><br>
-        👨‍💻 尔主龙彪 - AI应用工程师（组长）<br>
-        👨‍💻 任乾鹏 - 数据测试工程师<br>
-        👩‍💻 童妍 - 前端开发工程师
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    if st.button("🗑️ 清空对话", use_container_width=True):
-        st.session_state.messages = []
-        welcome_msg = f"""**你好呀！** 👋
-
-我们是**{SCHOOL_NAME}的成工职小助手**团队！
-
-✨ 我能帮你做校园问答、代码生成、表格生成、图片分析等
+- "学校官网" — 直接返回官网链接
+- "学校有什么新闻？" — 提取最新通知
+- "用Python写一个计算器"
 
 有什么问题尽管问！😊"""
-        st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
-        st.rerun()
-    
-    st.markdown("---")
-    st.caption(f"© {SCHOOL_NAME} | 多功能增强版")
+    })
 
-# ========== 主内容区 ==========
-# 学校标题区
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    title_html = f"""
-    <div class="main-header">
-        <div class="school-header">
-            <div class="logo-placeholder">
-    """
-    
-    if LOGO_PATH and os.path.exists(LOGO_PATH):
-        try:
-            img = Image.open(LOGO_PATH)
-            buffered = BytesIO()
-            img.save(buffered, format="PNG")
-            img_str = base64.b64encode(buffered.getvalue()).decode()
-            title_html += f'<img src="data:image/png;base64,{img_str}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">'
-        except:
-            title_html += '🎓'
-    else:
-        title_html += '🎓'
-    
-    title_html += f"""
-            </div>
-            <div class="school-title">
-                <h1>🏫 {SCHOOL_NAME}</h1>
-                <p>成工职小助手 | 智能AI客服 | 多功能增强版</p>
-                <div class="motto">「 {SCHOOL_MOTTO} 」</div>
-            </div>
-        </div>
-    </div>
-    """
-    
-    st.markdown(title_html, unsafe_allow_html=True)
-
-# 功能提示卡片
-if enable_thinking:
-    st.info("🧠 **深度思考模式已开启** - 我会展示思考过程，然后给出答案", icon="💭")
-if enable_search:
-    st.info("🌐 **联网搜索已开启** - 我会搜索最新信息来回答问题", icon="🔍")
-
-# 状态指示
-status_cols = st.columns(4)
-with status_cols[0]:
-    st.info("🤖 **AI在线**", icon="🤖")
-with status_cols[1]:
-    st.info("📚 **DeepSeek**", icon="📚")
-with status_cols[2]:
-    st.info(f"🧠 {'开启' if enable_thinking else '关闭'}", icon="💭")
-with status_cols[3]:
-    st.info(f"🌐 {'开启' if enable_search else '关闭'}", icon="🌐")
-
-# 功能展示卡片
-st.markdown("### ✨ 功能展示")
-func_cols = st.columns(4)
-with func_cols[0]:
-    st.markdown('<div class="function-card">💻<br><strong>代码生成</strong><br><span style="font-size:0.7rem">Python/Java/HTML</span></div>', unsafe_allow_html=True)
-with func_cols[1]:
-    st.markdown('<div class="function-card">📊<br><strong>表格生成</strong><br><span style="font-size:0.7rem">数据表格/课程表</span></div>', unsafe_allow_html=True)
-with func_cols[2]:
-    st.markdown('<div class="function-card">🎨<br><strong>图片分析</strong><br><span style="font-size:0.7rem">上传图片分析</span></div>', unsafe_allow_html=True)
-with func_cols[3]:
-    st.markdown('<div class="function-card">🧠<br><strong>深度思考</strong><br><span style="font-size:0.7rem">推理过程展示</span></div>', unsafe_allow_html=True)
-
-# ========== 图片上传功能（本地分析版）==========
-with st.expander("🖼️ 图片分析（上传图片进行分析）", expanded=False):
-    uploaded_file = st.file_uploader("选择图片", type=["png", "jpg", "jpeg", "gif", "bmp", "webp"], label_visibility="collapsed")
-    
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.image(image, width=200, caption="上传的图片")
-        
-        with col2:
-            st.info(f"📷 图片信息：\n- 格式：{uploaded_file.type}\n- 尺寸：{image.size[0]} x {image.size[1]} 像素")
-        
-        analyze_type = st.radio(
-            "选择分析类型：",
-            ["🎨 基础信息分析", "📝 图片文字识别(推荐在线OCR)", "🔍 物体识别(推荐在线服务)", "💡 综合报告"],
-            horizontal=True
-        )
-        
-        if st.button("🔍 开始分析图片", key="analyze_img", use_container_width=True):
-            
-            if analyze_type == "🎨 基础信息分析":
-                # 基础信息分析（纯本地，不需要API）
-                analysis_result = f"""
-**📊 图片基础信息分析**
-
-| 属性 | 值 |
-|------|-----|
-| 文件名 | {uploaded_file.name} |
-| 图片尺寸 | {image.size[0]} x {image.size[1]} 像素 |
-| 宽高比 | {round(image.size[0]/image.size[1], 2)} |
-| 颜色模式 | {image.mode} |
-| 图片格式 | {uploaded_file.type} |
-| 文件大小 | {len(uploaded_file.getvalue()) / 1024:.1f} KB |
-
-**🎨 颜色分析**
-- 图片包含多种颜色
-- 亮度和对比度适中
-{'✅ 图片清晰，适合进一步分析' if image.size[0] > 500 and image.size[1] > 500 else '⚠️ 图片尺寸较小，建议上传更清晰的图片'}
-
-**💡 使用建议**
-如需更详细的图片内容识别，请选择下方的在线OCR或物体识别服务。
-"""
-                st.markdown(analysis_result)
-                
-                st.session_state.messages.append({
-                    "role": "user", 
-                    "content": f"📷 [图片分析] 上传了图片：{uploaded_file.name}"
-                })
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": analysis_result
-                })
-                
-            elif analyze_type == "📝 图片文字识别(推荐在线OCR)":
-                st.markdown("""
-**📝 图片文字识别(OCR)推荐工具**
-
-| 工具 | 网址 | 特点 |
-|------|------|------|
-| **百度OCR** | https://ai.baidu.com/tech/ocr | 免费额度大 |
-| **腾讯OCR** | https://cloud.tencent.com/product/ocr | 识别准确 |
-| **天若OCR** | https://tianruoocr.cn/ | 免费开源 |
-| **PaddleOCR** | https://github.com/PaddlePaddle/PaddleOCR | 本地部署 |
-
-**使用步骤：**
-1. 复制链接到浏览器打开
-2. 上传图片识别
-3. 将结果贴回来，我帮你总结
-""")
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": "推荐了在线OCR工具，用户可在浏览器中识别图片文字。"
-                })
-                
-            elif analyze_type == "🔍 物体识别(推荐在线服务)":
-                st.markdown("""
-**🔍 物体/场景识别推荐**
-
-| 工具 | 网址 | 特点 |
-|------|------|------|
-| **Google Vision** | https://cloud.google.com/vision | 识别能力强 |
-| **百度图像识别** | https://ai.baidu.com/tech/image | 国内速度快 |
-| **Clarifai** | https://www.clarifai.com/ | 免费试用 |
-
-**使用步骤：**
-1. 访问以上网站
-2. 上传图片识别
-3. 将结果贴回来
-""")
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": "推荐了在线物体识别工具。"
-                })
-                
-            else:
-                analysis_result = f"""
-**📊 图片综合报告**
-
-**基本信息**
-- 文件名：{uploaded_file.name}
-- 尺寸：{image.size[0]} x {image.size[1]} 像素
-- 格式：{uploaded_file.type}
-- 大小：{len(uploaded_file.getvalue()) / 1024:.1f} KB
-
-**图片质量评估**
-{'✅ 图片清晰度良好' if image.size[0] > 800 and image.size[1] > 600 else '⚠️ 图片尺寸偏小'}
-
-**推荐操作**
-1. **提取文字** → 使用在线OCR工具（见上方）
-2. **识别物体** → 使用图像识别服务（见上方）
-"""
-                st.markdown(analysis_result)
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": analysis_result
-                })
-            
-            st.rerun()
-
-# ========== 聊天消息显示 ==========
-chat_container = st.container()
-
-with chat_container:
-    for msg in st.session_state.messages[-30:]:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+# ========== 显示历史消息 ==========
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
 # ========== 快捷问题 ==========
-st.markdown("---")
-st.caption("💡 快速提问")
+quick_cols = st.columns(5)
+quick_list = ["📚 图书馆几点开门", "🍽️ 食堂推荐", "📰 学校有什么新闻", "💻 Python计算器", "🏫 学校官网"]
 
-quick_questions = [
-    "📚 图书馆几点开门？",
-    "🍽️ 食堂有什么好吃的？",
-    "💻 用Python写一个猜数字游戏",
-    "📊 生成一个成绩表格",
-    "🎨 帮我写一个图片生成提示词",
-    "🏫 学校官网",
-]
-
-cols = st.columns(5)
-for i, q in enumerate(quick_questions):
-    with cols[i % 5]:
-        if st.button(q, key=f"quick_{i}", use_container_width=True):
+for idx, q in enumerate(quick_list):
+    with quick_cols[idx]:
+        if st.button(q, key=f"quick_{idx}", use_container_width=True):
+            with st.chat_message("user"):
+                st.markdown(q)
             st.session_state.messages.append({"role": "user", "content": q})
             
-            with st.spinner("三位学长学姐正在思考..."):
-                MAX_HISTORY = 8
-                recent = st.session_state.messages[-MAX_HISTORY:] if len(st.session_state.messages) > MAX_HISTORY else st.session_state.messages
-                api_messages = [{"role": m["role"], "content": m["content"]} for m in recent if m["role"] != "system"]
-                
-                if "Python" in q or "代码" in q or "写" in q:
-                    code_prompt = f"""请根据以下需求生成完整的、可运行的代码：
-
-需求：{q}
-
-要求：
-1. 代码要完整、可直接运行
-2. 添加必要的注释说明
-3. 包含示例用法
-4. 用```语言名```格式包裹
-
-请直接输出完整代码。"""
-                    temp_messages = [{"role": "user", "content": code_prompt}]
-                    response = call_deepseek_api(temp_messages, enable_thinking, None)
-                    if response is None:
-                        response = "```python\n# AI服务暂时不可用，请稍后重试\n```"
-                elif "表格" in q or "成绩" in q:
-                    table_prompt = f"""请根据以下需求生成一个Markdown格式的表格：
-
-需求：{q}
-
-要求：
-1. 用Markdown表格格式输出
-2. 包含合适的列名
-3. 提供3-5行示例数据
-
-请直接输出表格。"""
-                    temp_messages = [{"role": "user", "content": table_prompt}]
-                    response = call_deepseek_api(temp_messages, enable_thinking, None)
-                    if response is None:
-                        response = "| 项目 | 内容 |\n|------|------|\n| 示例1 | 数据1 |\n| 示例2 | 数据2 |"
-                elif "图片" in q or "提示词" in q:
-                    response = generate_image(q)
-                else:
-                    search_results = None
-                    if enable_search and SEARCH_AVAILABLE:
-                        search_results = search_online(q)
-                    response = call_deepseek_api(api_messages, enable_thinking, search_results)
-                    
-                    if response is None:
-                        response = get_local_response(q)
-                        if response is None:
-                            response = "抱歉，AI服务暂时有点问题。你可以稍后再试。"
-                
-                st.session_state.messages.append({"role": "assistant", "content": response})
+            with st.chat_message("assistant"):
+                with st.spinner("学长学姐正在思考..."):
+                    persona_key = select_persona(q)
+                    prefix = get_persona_prefix(persona_key)
+                    response = get_ai_response(q, persona_key, enable_thinking, enable_search)
+                    full_response = prefix + response
+                    st.markdown(full_response)
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
             st.rerun()
 
-# ========== 输入框 ==========
-st.markdown("---")
-
-with st.form(key="chat_form", clear_on_submit=True):
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        user_input = st.text_input(
-            "问题",
-            placeholder="输入你的问题... 例如：用Python写一个计算器、生成课程表、图书馆几点开门",
-            key="user_input",
-            label_visibility="collapsed"
-        )
-    with col2:
-        submitted = st.form_submit_button("发送 📤", use_container_width=True)
+# ========== 主输入框 ==========
+user_input = st.chat_input("输入你的问题...")
+if user_input:
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
     
-    if submitted and user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        
-        with st.spinner("三位学长学姐正在思考..."):
-            MAX_HISTORY = 8
-            recent = st.session_state.messages[-MAX_HISTORY:] if len(st.session_state.messages) > MAX_HISTORY else st.session_state.messages
-            api_messages = [{"role": m["role"], "content": m["content"]} for m in recent if m["role"] != "system"]
-            
-            user_lower = user_input.lower()
-            
-            if any(word in user_lower for word in ["python", "java", "html", "css", "javascript", "sql", "代码", "写一个", "编写", "编程"]):
-                code_prompt = f"""请根据以下需求生成完整的、可运行的代码：
-
-需求：{user_input}
-
-要求：
-1. 代码要完整、可直接运行
-2. 添加必要的注释说明
-3. 包含示例用法或测试代码
-4. 如果是Python，包含if __name__ == "__main__"入口
-5. 如果是HTML/CSS，确保可以直接在浏览器打开
-6. 代码用```语言名```格式包裹
-
-请直接输出完整代码，不要只说"这是模板"。"""
-                
-                temp_messages = [{"role": "user", "content": code_prompt}]
-                response = call_deepseek_api(temp_messages, enable_thinking, None)
-                
-                if response is None:
-                    response = f"""```python
-# {user_input}
-# AI服务暂时不可用，请稍后重试
-
-def solution():
-    '''请根据具体需求实现'''
-    pass
-
-if __name__ == "__main__":
-    solution()
-```"""
-            
-            elif any(word in user_lower for word in ["表格", "表", "成绩单", "课程表", "数据表"]):
-                table_prompt = f"""请根据以下需求生成一个Markdown格式的表格：
-
-需求：{user_input}
-
-要求：
-1. 用Markdown表格格式输出
-2. 包含合适的列名
-3. 提供3-5行示例数据
-4. 如果是课程表，包含时间、课程、地点等信息
-
-请直接输出表格。"""
-                
-                temp_messages = [{"role": "user", "content": table_prompt}]
-                response = call_deepseek_api(temp_messages, enable_thinking, None)
-                
-                if response is None:
-                    response = f"**根据需求生成的示例表格：**\n\n| 项目 | 内容 |\n|------|------|\n| 示例1 | 数据1 |\n| 示例2 | 数据2 |\n\n💡 请告诉我更具体的需求。"
-            
-            elif any(word in user_lower for word in ["图片", "图像", "画", "生成图片", "绘图"]):
-                response = generate_image(user_input)
-            
-            else:
-                search_results = None
-                if enable_search and SEARCH_AVAILABLE:
-                    search_results = search_online(user_input)
-                response = call_deepseek_api(api_messages, enable_thinking, search_results)
-                
-                if response is None:
-                    response = get_local_response(user_input)
-                    if response is None:
-                        response = "抱歉，AI服务暂时有点问题。你可以稍后再试，或者问我图书馆、食堂、选课等问题。"
-            
-            st.session_state.messages.append({"role": "assistant", "content": response})
-        st.rerun()
-
-# 页脚
-st.markdown("---")
-st.caption(f"💡 提示：\n• **代码生成** - 说\"用Python写...\"\n• **表格生成** - 说\"生成成绩表...\"\n• **图片分析** - 点击上方展开上传图片\n• **图片提示词** - 说\"生成图片提示词\"\n• **深度思考** - 侧边栏开启 | {SCHOOL_NAME} 智能客服系统 | 👥 尔主龙彪、任乾鹏、童妍 联合开发")
+    with st.chat_message("assistant"):
+        with st.spinner("学长学姐正在思考..."):
+            persona_key = select_persona(user_input)
+            prefix = get_persona_prefix(persona_key)
+            response = get_ai_response(user_input, persona_key, enable_thinking, enable_search)
+            full_response = prefix + response
+            st.markdown(full_response)
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+    
+    st.rerun()
