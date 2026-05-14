@@ -1,5 +1,5 @@
 """
-成工职小助手 - 官网新闻提取版（修复版）
+成工职小助手 - 官网新闻提取版（完整版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -37,6 +37,7 @@ SCHOOL_NAME = "成都工业职业技术学院"
 SCHOOL_SHORT = "成工职院"
 SCHOOL_MOTTO = "立德树人 精工强技"
 SCHOOL_OFFICIAL_URL = "https://www.cdivtc.edu.cn"  
+COURSE_SYSTEM_URL = "http://sw.cdivtc.edu.cn/app-web/#/login"  # 教务系统链接
 
 st.set_page_config(
     page_title=f"{SCHOOL_NAME} - 成工职小助手",
@@ -179,7 +180,7 @@ def select_persona(question):
     q = question.lower()
     if any(word in q for word in ["python", "java", "html", "代码", "编程", "选课"]):
         return "longbiao"
-    elif any(word in q for word in ["考试", "复习", "数据", "表格", "成绩"]):
+    elif any(word in q for word in ["考试", "复习", "数据", "表格", "成绩", "绩点", "课表", "成绩查询"]):
         return "qianpeng"
     elif any(word in q for word in ["食堂", "宿舍", "社团", "校园", "生活", "美食"]):
         return "tongyan"
@@ -214,6 +215,19 @@ LOCAL_KNOWLEDGE = {
     "奖学金": "🏆 国家奖学金8000元，申请时间每年9月",
     "校医院": "🏥 24小时值班，急诊电话：1200",
     "官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
+    
+    # ===== 教务系统相关 =====
+    "课表": f"📅 **课表查询**\n\n请点击下方链接登录教务系统查看：\n\n🔗 {COURSE_SYSTEM_URL}\n\n💡 使用说明：\n1. 点击上方链接进入登录页面\n2. 使用教务系统账号密码登录\n3. 登录后即可查看个人课表",
+    
+    "课程表": f"📅 **课程表查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n登录后可查看：\n• 本学期课程安排\n• 上课时间地点\n• 周次节次信息",
+    
+    "成绩": f"📊 **成绩查询**\n\n请通过教务系统查询：\n🔗 {COURSE_SYSTEM_URL}\n\n登录后进入「成绩查询」模块即可查看：\n• 各科考试成绩\n• 学分绩点(GPA)\n• 学期/学年成绩单",
+    
+    "成绩查询": f"📊 **成绩查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n登录后选择「成绩查询」即可查看详细成绩。",
+    
+    "绩点": f"📈 **绩点(GPA)查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n💡 关于绩点：\n• 登录系统后可查看各科绩点\n• 通常90-100分对应4.0绩点\n• 具体计算方法可咨询教务处\n\n🔗 查询入口：{COURSE_SYSTEM_URL}",
+    
+    "教务系统": f"🎓 **教务系统入口**\n\n地址：{COURSE_SYSTEM_URL}\n\n功能包括：\n• 选课\n• 课表查询\n• 成绩查询\n• 考试安排\n• 培养方案查看",
 }
 
 def get_local_answer(question):
@@ -259,17 +273,22 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
         print(f"API调用失败: {e}")
         return None
 
-# ========== 核心回复函数（已修复官网链接）==========
+# ========== 核心回复函数 ==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
-    # ===== 官网链接查询（最高优先级）=====
+    # ===== 教务系统链接查询（最高优先级）=====
+    if any(word in lower for word in ["课表", "课程表", "成绩", "绩点", "gpa", "教务系统", "选课系统", "成绩查询", "查成绩", "看成绩", "我的成绩"]):
+        local_answer = get_local_answer(user_input)
+        if local_answer:
+            return local_answer
+    
+    # ===== 官网链接查询 =====
     if any(word in lower for word in ["官网链接", "官网地址", "学校官网", "学校网站", "学校网址"]):
         return f"🌐 {SCHOOL_NAME}官方网站：\n\n{SCHOOL_OFFICIAL_URL}\n\n你可以点击访问了解学校最新动态、通知公告、招生就业等信息~"
     
     # ===== 官网新闻/通知提取 =====
     if any(word in lower for word in ["新闻", "通知", "公告", "最新", "最近", "有什么活动", "学校有什么", "校园新闻", "近期活动", "学校动态"]):
-        # 排除纯官网查询
         if "官网" not in lower or ("新闻" in lower or "通知" in lower):
             with st.spinner("正在从官网获取最新信息..."):
                 news = fetch_news_from_website()
@@ -311,7 +330,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             return response
         else:
             local = get_local_answer(user_input)
-            return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 学校有什么新闻？\n- 用Python写一个计算器"
+            return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 课表查询\n- 成绩查询\n- 学校有什么新闻？\n- 用Python写一个计算器"
 
 # ========== CSS 样式 ==========
 st.markdown("""
@@ -392,14 +411,23 @@ with st.sidebar:
     st.markdown(f"*{SCHOOL_MOTTO}*")
     st.markdown("---")
     
+    # 模式设置
     enable_thinking = st.toggle("🧠 深度思考模式", value=False)
     enable_search = st.toggle("🌐 联网搜索", value=False)
     
     st.markdown("---")
     
+    # 学校官网按钮
     if st.button("🏫 学校官网", use_container_width=True):
         import webbrowser
         webbrowser.open(SCHOOL_OFFICIAL_URL)
+    
+    # 移动教务系统按钮（新增）
+    if st.button("📚 移动教务系统", use_container_width=True):
+        import webbrowser
+        webbrowser.open(COURSE_SYSTEM_URL)
+    
+    st.markdown("---")
     
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
@@ -423,16 +451,23 @@ if "messages" not in st.session_state:
 你好呀！我是由三位学长学姐共同组成的AI助手：
 
 - 👨‍💻 **尔主龙彪学长**：AI、编程、选课
-- 📊 **任乾鹏学长**：数据分析、表格
+- 📊 **任乾鹏学长**：数据分析、表格、成绩查询
 - 👩‍💻 **童妍学姐**：校园生活、社团
 
 ---
 
+**📌 快捷功能：**
+- 📅 **课表查询** → 教务系统链接
+- 📊 **成绩查询** → 查看考试成绩和绩点
+- 🏫 **学校官网** → 了解学校动态
+- 📰 **学校新闻** → 提取最新通知
+
 **试试问我：**
 - "图书馆几点开门？"
-- "学校官网" — 直接返回官网链接
-- "学校有什么新闻？" — 提取最新通知
-- "用Python写一个计算器"
+- "课表查询"
+- "我的成绩"
+- "绩点怎么算？"
+- "学校有什么新闻？"
 
 有什么问题尽管问！😊"""
     })
@@ -444,7 +479,7 @@ for msg in st.session_state.messages:
 
 # ========== 快捷问题 ==========
 quick_cols = st.columns(5)
-quick_list = ["📚 图书馆几点开门", "🍽️ 食堂推荐", "📰 学校有什么新闻", "💻 Python计算器", "🏫 学校官网"]
+quick_list = ["📚 图书馆几点开门", "🍽️ 食堂推荐", "📅 课表查询", "📊 成绩查询", "🏫 学校官网"]
 
 for idx, q in enumerate(quick_list):
     with quick_cols[idx]:
