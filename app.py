@@ -1,5 +1,5 @@
 """
-成工职小助手 - 官网新闻提取版（完整版）
+成工职小助手 - 官网新闻提取版（修复版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -37,13 +37,13 @@ SCHOOL_NAME = "成都工业职业技术学院"
 SCHOOL_SHORT = "成工职院"
 SCHOOL_MOTTO = "立德树人 精工强技"
 SCHOOL_OFFICIAL_URL = "https://www.cdivtc.edu.cn"  
-COURSE_SYSTEM_URL = "http://sw.cdivtc.edu.cn/app-web/#/login"  # 教务系统链接
+COURSE_SYSTEM_URL = "http://sw.cdivtc.edu.cn/app-web/#/login"
 
 st.set_page_config(
     page_title=f"{SCHOOL_NAME} - 成工职小助手",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="expanded"  # 改为expanded，让用户可以折叠侧边栏
 )
 
 # ========== 检查校徽 ==========
@@ -54,57 +54,135 @@ for f in logo_files:
         LOGO_PATH = f
         break
 
-# ========== 官网新闻提取功能 ==========
-def fetch_news_from_website():
-    """从学校官网提取最新新闻"""
+# 加载校徽图片为base64（用于头像）
+LOGO_BASE64 = None
+if LOGO_PATH and os.path.exists(LOGO_PATH):
     try:
+        with open(LOGO_PATH, "rb") as img_file:
+            LOGO_BASE64 = base64.b64encode(img_file.read()).decode()
+    except:
+        pass
+
+# ========== 官网新闻提取功能（增强版） ==========
+def fetch_news_from_website():
+    """从学校官网提取最新新闻 - 增强版，增加多种伪装和备用方案"""
+    try:
+        # 使用Session保持连接
+        session = requests.Session()
+        
+        # 多个User-Agent轮换
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': random.choice(user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0'
         }
         
+        # 尝试多个可能的新闻页面
         news_urls = [
             f"{SCHOOL_OFFICIAL_URL}/xwzx/xyyw.htm",
             f"{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm",
             f"{SCHOOL_OFFICIAL_URL}/index.htm",
+            f"{SCHOOL_OFFICIAL_URL}/news/",
+            f"{SCHOOL_OFFICIAL_URL}/xwzx.htm",
         ]
         
         all_news = []
         
         for url in news_urls:
             try:
-                response = requests.get(url, headers=headers, timeout=10)
-                response.encoding = 'utf-8'
-                soup = BeautifulSoup(response.text, 'html.parser')
+                print(f"尝试访问: {url}")
+                response = session.get(url, headers=headers, timeout=8)
                 
-                for link in soup.find_all('a', href=True):
-                    title = link.get_text(strip=True)
-                    href = link['href']
+                if response.status_code != 200:
+                    print(f"访问失败，状态码: {response.status_code}")
+                    continue
+                
+                # 尝试多种编码
+                for encoding in ['utf-8', 'gbk', 'gb2312']:
+                    try:
+                        response.encoding = encoding
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        break
+                    except:
+                        continue
+                
+                # 多种选择器尝试
+                selectors = [
+                    'a', 
+                    'a.title', 
+                    '.news-title', 
+                    '.tit', 
+                    '.list-item', 
+                    'li a',
+                    '.cate_list a',
+                    '.news_list a'
+                ]
+                
+                found_news = []
+                
+                for selector in selectors:
+                    links = soup.select(selector)
+                    for link in links:
+                        title = link.get_text(strip=True)
+                        href = link.get('href', '')
+                        
+                        # 过滤有效新闻
+                        if (len(title) > 8 and len(title) < 100 and 
+                            any(word in title for word in ['通知', '公告', '活动', '比赛', '讲座', '招聘', '会议', '关于', '开展', '举办', '2025', '2026'])):
+                            
+                            # 处理相对链接
+                            if href.startswith('/'):
+                                href = SCHOOL_OFFICIAL_URL + href
+                            elif href.startswith('./'):
+                                href = SCHOOL_OFFICIAL_URL + href[1:]
+                            elif href.startswith('..'):
+                                href = SCHOOL_OFFICIAL_URL + href[2:]
+                            elif not href.startswith('http'):
+                                href = SCHOOL_OFFICIAL_URL + '/' + href
+                            
+                            # 去重
+                            if not any(n['title'] == title for n in found_news):
+                                found_news.append({'title': title, 'link': href})
+                                
+                    if len(found_news) >= 3:
+                        break
+                
+                all_news.extend(found_news[:3])
+                
+                if len(all_news) >= 6:
+                    break
                     
-                    if len(title) > 10 and any(word in title for word in ['通知', '公告', '活动', '比赛', '讲座', '招聘', '会议']):
-                        if href.startswith('/'):
-                            href = SCHOOL_OFFICIAL_URL + href
-                        elif not href.startswith('http'):
-                            href = SCHOOL_OFFICIAL_URL + '/' + href
-                        
-                        all_news.append({
-                            'title': title,
-                            'link': href,
-                            'source': url
-                        })
-                        
-                        if len(all_news) >= 8:
-                            break
-            except:
+            except requests.Timeout:
+                print(f"访问超时: {url}")
                 continue
-            
-            if len(all_news) >= 8:
-                break
+            except Exception as e:
+                print(f"解析失败: {url}, 错误: {e}")
+                continue
         
-        return all_news[:6]
-    
+        return all_news[:6] if all_news else None
+        
     except Exception as e:
         print(f"新闻提取失败: {e}")
         return None
+
+def get_preset_news_links():
+    """返回预设的新闻链接（当无法抓取时使用）"""
+    return [
+        {"title": "📢 访问学校官网获取最新通知公告", "link": SCHOOL_OFFICIAL_URL},
+        {"title": "📚 教务系统 - 查询课表成绩", "link": COURSE_SYSTEM_URL},
+        {"title": "🏫 招生就业信息", "link": f"{SCHOOL_OFFICIAL_URL}/zsjy.htm"},
+        {"title": "🎓 学校新闻中心", "link": f"{SCHOOL_OFFICIAL_URL}/xwzx/xyyw.htm"},
+    ]
 
 def summarize_news_with_ai(news_list, query_type="news"):
     """使用AI总结新闻内容"""
@@ -155,21 +233,21 @@ def summarize_news_with_ai(news_list, query_type="news"):
 PERSONAS = {
     "longbiao": {
         "name": "尔主龙彪",
-        "avatar": "👨‍💻",
+        "avatar": "校徽" if LOGO_BASE64 else "👨‍💻",
         "title": "AI应用工程师 · 组长",
         "style": "技术控、逻辑清晰、耐心解答",
         "greeting": "这个问题我来帮你分析一下...",
     },
     "qianpeng": {
         "name": "任乾鹏",
-        "avatar": "📊",
+        "avatar": "校徽" if LOGO_BASE64 else "📊",
         "title": "数据测试工程师",
         "style": "细心、严谨、数据敏感",
         "greeting": "据我整理的数据显示...",
     },
     "tongyan": {
         "name": "童妍",
-        "avatar": "👩‍💻",
+        "avatar": "校徽" if LOGO_BASE64 else "👩‍💻",
         "title": "前端开发工程师",
         "style": "热情、细心、善于沟通",
         "greeting": "成工生活我超熟的！",
@@ -189,9 +267,11 @@ def select_persona(question):
 
 def get_persona_prefix(persona_key):
     persona = PERSONAS[persona_key]
-    return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
+    if LOGO_BASE64 and persona['avatar'] == "校徽":
+        return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}**\n\n> *{persona['greeting']}*\n\n"
+    else:
+        return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
 
-# ========== System Prompt ==========
 def get_system_prompt(persona_key):
     persona = PERSONAS[persona_key]
     return f"""你是"{SCHOOL_NAME}的成工职小助手"，你是{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}。
@@ -207,27 +287,23 @@ def get_system_prompt(persona_key):
 
 # ========== 本地知识库 ==========
 LOCAL_KNOWLEDGE = {
-    "图书馆": "📚 图书馆开放时间：周一至周五 8:00-22:00，周末 9:00-21:00",
-    "食堂": "🍽️ 食堂营业时间：早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n\n🍜 推荐：二食堂牛肉面",
-    "选课": "📅 选课时间：预选第18周，正选开学前1周，补退选开学第1周",
-    "宿舍": "🔧 宿舍报修：公众号「成工后勤」或联系楼栋管理员",
-    "校园卡": "💳 充值方式：微信公众号、支付宝、食堂自助机",
-    "奖学金": "🏆 国家奖学金8000元，申请时间每年9月",
-    "校医院": "🏥 24小时值班，急诊电话：1200",
+    "图书馆": "📚 图书馆开放时间：周一至周五 8:00-22:00，周末 9:00-21:00\n\n💡 借阅规则：学生最多可借10册，借期30天",
+    "食堂": "🍽️ 食堂营业时间：早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n\n🍜 推荐：二食堂牛肉面、一食堂冒菜",
+    "选课": "📅 选课时间：预选第18周，正选开学前1周，补退选开学第1周\n\n💡 选课前请先查看培养方案",
+    "宿舍": "🔧 宿舍报修：公众号「成工后勤」或联系楼栋管理员\n\n🕐 熄灯时间：23:00（周五周六23:30）",
+    "校园卡": "💳 充值方式：微信公众号、支付宝、食堂自助机\n\n🔄 挂失补办：带上学生证到卡务中心",
+    "奖学金": "🏆 国家奖学金8000元，申请时间每年9月\n🏆 国家励志奖学金5000元",
+    "校医院": "🏥 24小时值班，急诊电话：1200\n💊 校医院地址：学生公寓6栋一楼",
     "官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
     
-    # ===== 教务系统相关 =====
+    # 教务系统相关
     "课表": f"📅 **课表查询**\n\n请点击下方链接登录教务系统查看：\n\n🔗 {COURSE_SYSTEM_URL}\n\n💡 使用说明：\n1. 点击上方链接进入登录页面\n2. 使用教务系统账号密码登录\n3. 登录后即可查看个人课表",
     
-    "课程表": f"📅 **课程表查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n登录后可查看：\n• 本学期课程安排\n• 上课时间地点\n• 周次节次信息",
+    "成绩": f"📊 **成绩查询**\n\n请通过教务系统查询：\n🔗 {COURSE_SYSTEM_URL}\n\n登录后进入「成绩查询」模块即可查看各科考试成绩",
     
-    "成绩": f"📊 **成绩查询**\n\n请通过教务系统查询：\n🔗 {COURSE_SYSTEM_URL}\n\n登录后进入「成绩查询」模块即可查看：\n• 各科考试成绩\n• 学分绩点(GPA)\n• 学期/学年成绩单",
+    "绩点": f"📈 **绩点(GPA)查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n💡 登录后可查看各科绩点",
     
-    "成绩查询": f"📊 **成绩查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n登录后选择「成绩查询」即可查看详细成绩。",
-    
-    "绩点": f"📈 **绩点(GPA)查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n💡 关于绩点：\n• 登录系统后可查看各科绩点\n• 通常90-100分对应4.0绩点\n• 具体计算方法可咨询教务处\n\n🔗 查询入口：{COURSE_SYSTEM_URL}",
-    
-    "教务系统": f"🎓 **教务系统入口**\n\n地址：{COURSE_SYSTEM_URL}\n\n功能包括：\n• 选课\n• 课表查询\n• 成绩查询\n• 考试安排\n• 培养方案查看",
+    "教务系统": f"🎓 **教务系统入口**\n\n地址：{COURSE_SYSTEM_URL}\n\n功能包括：选课、课表查询、成绩查询、考试安排",
 }
 
 def get_local_answer(question):
@@ -277,46 +353,63 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
-    # ===== 教务系统链接查询（最高优先级）=====
+    # 教务系统链接查询
     if any(word in lower for word in ["课表", "课程表", "成绩", "绩点", "gpa", "教务系统", "选课系统", "成绩查询", "查成绩", "看成绩", "我的成绩"]):
         local_answer = get_local_answer(user_input)
         if local_answer:
             return local_answer
     
-    # ===== 官网链接查询 =====
+    # 官网链接查询
     if any(word in lower for word in ["官网链接", "官网地址", "学校官网", "学校网站", "学校网址"]):
-        return f"🌐 {SCHOOL_NAME}官方网站：\n\n{SCHOOL_OFFICIAL_URL}\n\n你可以点击访问了解学校最新动态、通知公告、招生就业等信息~"
+        return f"🌐 {SCHOOL_NAME}官方网站：\n\n{SCHOOL_OFFICIAL_URL}\n\n你可以点击访问了解学校最新动态~"
     
-    # ===== 官网新闻/通知提取 =====
+    # 官网新闻/通知提取
     if any(word in lower for word in ["新闻", "通知", "公告", "最新", "最近", "有什么活动", "学校有什么", "校园新闻", "近期活动", "学校动态"]):
-        if "官网" not in lower or ("新闻" in lower or "通知" in lower):
-            with st.spinner("正在从官网获取最新信息..."):
-                news = fetch_news_from_website()
-                if news:
-                    summarized = summarize_news_with_ai(news, "news")
-                    if summarized:
-                        return f"🔍 我从学校官网找到了这些最新信息：\n\n{summarized}\n\n---\n📌 以上信息来自学校官网，更多详情请点击链接查看~"
-                    else:
-                        news_text = "📢 学校官网最新动态：\n\n"
-                        for n in news:
-                            news_text += f"• {n['title']}\n  链接：{n['link']}\n\n"
-                        return news_text
+        with st.spinner("正在从官网获取最新信息..."):
+            news = fetch_news_from_website()
+            if news and len(news) > 0:
+                summarized = summarize_news_with_ai(news, "news")
+                if summarized:
+                    return f"🔍 我从学校官网找到了这些最新信息：\n\n{summarized}\n\n---\n📌 以上信息来自学校官网，更多详情请点击链接查看~"
                 else:
-                    return f"抱歉，暂时无法获取官网信息。你可以直接访问学校官网：\n\n{SCHOOL_OFFICIAL_URL}"
+                    # 如果AI总结失败，直接显示新闻列表
+                    news_text = "📢 学校官网最新动态：\n\n"
+                    for n in news:
+                        news_text += f"• {n['title']}\n  链接：{n['link']}\n\n"
+                    return news_text
+            else:
+                # 抓取失败时，给出友好提示和备用链接
+                return f"""😅 暂时无法从官网获取最新信息（可能是网络原因）
+
+不过你可以直接访问以下链接查看：
+
+**📌 学校官网**
+🔗 {SCHOOL_OFFICIAL_URL}
+
+**📌 新闻中心**
+🔗 {SCHOOL_OFFICIAL_URL}/xwzx/xyyw.htm
+
+**📌 通知公告**
+🔗 {SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm
+
+**📌 教务系统**
+🔗 {COURSE_SYSTEM_URL}
+
+💡 提示：如果链接无法直接访问，请复制到浏览器打开~"""
     
-    # ===== 代码生成 =====
+    # 代码生成
     if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
         full_prompt = f"请生成完整的代码：{user_input}\n要求：完整、有注释、可运行，用```语言名```格式。"
         response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
         return response if response else "代码生成暂时不可用"
     
-    # ===== 表格生成 =====
+    # 表格生成
     elif any(w in lower for w in ["表格", "表", "成绩单", "课程表"]):
         full_prompt = f"请生成Markdown表格：{user_input}\n要求：标准格式，包含列名和示例数据。"
         response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
         return response if response else "表格生成暂时不可用"
     
-    # ===== 普通问答 =====
+    # 普通问答
     else:
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
@@ -330,24 +423,79 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             return response
         else:
             local = get_local_answer(user_input)
-            return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 课表查询\n- 成绩查询\n- 学校有什么新闻？\n- 用Python写一个计算器"
+            return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 课表查询\n- 成绩查询\n- 学校有什么新闻？"
 
-# ========== CSS 样式 ==========
+# ========== CSS 样式（移动端优化） ==========
 st.markdown("""
 <style>
     #MainMenu, header, footer {visibility: hidden;}
     .stApp {background: #fafafc;}
     
-    .main .block-container {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 1rem 1rem 5rem 1rem;
+    /* 桌面端样式 */
+    @media (min-width: 769px) {
+        .main .block-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 1rem 1rem 5rem 1rem;
+        }
+        
+        .mobile-bottom-nav {
+            display: none !important;
+        }
     }
     
-    [data-testid="stChatMessage"] {
-        margin-bottom: 0.5rem;
+    /* 移动端样式 */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding: 0.5rem 0.8rem 70px 0.8rem !important;
+        }
+        
+        .mobile-bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 12px;
+            border-top: 1px solid #e0e0e0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.95);
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            text-decoration: none;
+            color: #666;
+            font-size: 0.7rem;
+            flex: 1;
+            text-align: center;
+            padding: 6px 0;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+        
+        .nav-item:hover, .nav-item.active {
+            background: #f0f0f0;
+            color: #1a4d8c;
+        }
+        
+        .nav-icon {
+            font-size: 1.3rem;
+        }
+        
+        [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
+            padding: 10px 14px !important;
+            font-size: 0.85rem !important;
+        }
     }
     
+    /* 消息气泡通用 */
     [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
         padding: 12px 18px;
         border-radius: 20px;
@@ -395,6 +543,42 @@ st.markdown("""
         overflow-x: auto;
     }
 </style>
+
+<!-- 移动端底部导航栏 -->
+<div class="mobile-bottom-nav" id="mobileNav">
+    <a href="#" class="nav-item" onclick="sendMessage('图书馆几点开门？'); return false;">
+        <span class="nav-icon">📚</span>
+        <span>图书馆</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('课表查询'); return false;">
+        <span class="nav-icon">📅</span>
+        <span>课表</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('成绩查询'); return false;">
+        <span class="nav-icon">📊</span>
+        <span>成绩</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('学校官网'); return false;">
+        <span class="nav-icon">🏫</span>
+        <span>官网</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('食堂有什么好吃的？'); return false;">
+        <span class="nav-icon">🍽️</span>
+        <span>食堂</span>
+    </a>
+</div>
+
+<script>
+function sendMessage(msg) {
+    const input = document.querySelector('.stChatInput textarea');
+    if (input) {
+        input.value = msg;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const button = document.querySelector('.stChatInput button');
+        if (button) button.click();
+    }
+}
+</script>
 """, unsafe_allow_html=True)
 
 # ========== 侧边栏 ==========
@@ -417,7 +601,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 学校官网按钮（HTML链接）
+    # 学校官网按钮
     st.markdown(f"""
     <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
         display: block;
@@ -434,7 +618,7 @@ with st.sidebar:
     ">🏫 学校官网</a>
     """, unsafe_allow_html=True)
     
-    # 移动教务系统按钮（HTML链接）
+    # 教务系统按钮
     st.markdown(f"""
     <a href="{COURSE_SYSTEM_URL}" target="_blank" style="
         display: block;
@@ -448,7 +632,7 @@ with st.sidebar:
         text-align: center;
         margin-bottom: 0.5rem;
         cursor: pointer;
-    ">📚 移动教务系统</a>
+    ">📚 教务系统</a>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
@@ -468,9 +652,10 @@ with st.sidebar:
 # ========== 初始化会话 ==========
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": """# 🎓 成工职小助手
+    if LOGO_BASE64:
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": f"""# 🎓 {SCHOOL_NAME} - 成工职小助手
 
 你好呀！我是由三位学长学姐共同组成的AI助手：
 
@@ -494,7 +679,35 @@ if "messages" not in st.session_state:
 - "学校有什么新闻？"
 
 有什么问题尽管问！😊"""
-    })
+        })
+    else:
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": f"""# 🎓 {SCHOOL_NAME} - 成工职小助手
+
+你好呀！我是由三位学长学姐共同组成的AI助手：
+
+- 👨‍💻 **尔主龙彪学长**：AI、编程、选课
+- 📊 **任乾鹏学长**：数据分析、表格、成绩查询
+- 👩‍💻 **童妍学姐**：校园生活、社团
+
+---
+
+**📌 快捷功能：**
+- 📅 **课表查询** → 教务系统链接
+- 📊 **成绩查询** → 查看考试成绩和绩点
+- 🏫 **学校官网** → 了解学校动态
+- 📰 **学校新闻** → 提取最新通知
+
+**试试问我：**
+- "图书馆几点开门？"
+- "课表查询"
+- "我的成绩"
+- "绩点怎么算？"
+- "学校有什么新闻？"
+
+有什么问题尽管问！😊"""
+        })
 
 # ========== 显示历史消息 ==========
 for msg in st.session_state.messages:
