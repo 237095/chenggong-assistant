@@ -1,5 +1,5 @@
 """
-成工职小助手 - 完整版（含百度热搜）
+成工职小助手 - 完整版（AI智能热点 + 长对话记忆）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -40,12 +40,12 @@ SCHOOL_MOTTO = "立德树人 精工强技"
 SCHOOL_OFFICIAL_URL = "https://www.cdivtc.edu.cn"  
 COURSE_SYSTEM_URL = "http://sw.cdivtc.edu.cn/app-web/#/login"
 
-# ========== 页面配置 - 使用 expanded 让侧边栏可折叠 ==========
+# ========== 页面配置 ==========
 st.set_page_config(
     page_title=f"{SCHOOL_NAME} - 成工职小助手",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="expanded"  # 默认展开，用户可点击左上角按钮折叠
+    initial_sidebar_state="expanded"
 )
 
 # ========== 检查校徽 ==========
@@ -56,7 +56,6 @@ for f in logo_files:
         LOGO_PATH = f
         break
 
-# 加载校徽图片为base64（用于头像）
 LOGO_BASE64 = None
 if LOGO_PATH and os.path.exists(LOGO_PATH):
     try:
@@ -65,213 +64,103 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== 百度热搜获取功能（多备用版） ==========
-def fetch_baidu_hot_search(limit=15):
-    """获取百度热搜榜数据 - 多个备用API"""
-    
-    # 多个备用API（按优先级排序）
-    apis = [
-        {
-            "url": "https://api.52vmy.cn/api/hot/baidu",
-            "path": "data",
-            "keyword": "title",
-            "link": "url"
-        },
-        {
-            "url": "https://api.iyk0.com/baidu_hot/",
-            "path": "data",
-            "keyword": "title",
-            "link": "url"
-        },
-        {
-            "url": "https://api.vvhan.com/api/hotlist/baidu",
-            "path": "data",
-            "keyword": "title",
-            "link": "url"
-        },
-        {
-            "url": "https://www.hotlistapi.com/api/hot/baidu",
-            "path": "data",
-            "keyword": "keyword",
-            "link": "href"
-        }
-    ]
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-    
-    for api in apis:
-        try:
-            print(f"尝试API: {api['url']}")
-            response = requests.get(api['url'], headers=headers, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # 尝试解析数据
-                hot_list = None
-                if isinstance(data, dict):
-                    # 按路径获取数据
-                    path_parts = api['path'].split('.')
-                    temp_data = data
-                    for part in path_parts:
-                        if part in temp_data:
-                            temp_data = temp_data[part]
-                        else:
-                            temp_data = None
-                            break
-                    hot_list = temp_data
-                elif isinstance(data, list):
-                    hot_list = data
-                
-                if hot_list and isinstance(hot_list, list) and len(hot_list) > 0:
-                    result = []
-                    for item in hot_list[:limit]:
-                        keyword = item.get(api['keyword'], '') or item.get('title', '') or item.get('name', '')
-                        link = item.get(api['link'], '') or item.get('url', '') or item.get('href', '')
-                        
-                        if keyword:
-                            result.append({
-                                'keyword': keyword,
-                                'href': link if link.startswith('http') else f"https://www.baidu.com/s?wd={keyword}"
-                            })
-                    
-                    if result:
-                        print(f"成功从 {api['url']} 获取数据")
-                        return result[:limit]
-                        
-        except Exception as e:
-            print(f"API {api['url']} 失败: {e}")
-            continue
-    
-    return None
+# ========== AI智能热点获取功能 ==========
+def get_ai_hot_trending(user_query):
+    prompt = f"""用户问：{user_query}
 
-def format_hot_search_response(hot_list):
-    """格式化热搜数据为美观的回复"""
-    if not hot_list or len(hot_list) == 0:
-        return None
-    
-    # 获取当前时间
-    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    
-    # 构建回复内容
-    response = f"""🔥 **百度热搜榜** 🔥
+请根据你掌握的知识，回答当前网络热点话题。
 
-📅 更新时间：{now}
-
-"""
-    for idx, item in enumerate(hot_list, 1):
-        keyword = item.get('keyword', '')
-        href = item.get('href', '')
-        
-        # 热度图标（前3名加🔥）
-        if idx <= 3:
-            icon = "🔥"
-        elif idx <= 10:
-            icon = "📈"
-        else:
-            icon = "●"
-        
-        # 添加排名和热点链接
-        if href:
-            response += f"{icon} **{idx}. [{keyword}]({href})**\n\n"
-        else:
-            response += f"{icon} **{idx}. {keyword}**\n\n"
+要求：
+1. 列出10-15个当前热门话题（涵盖科技、娱乐、社会、教育、校园等）
+2. 每个话题用一句话简单介绍
+3. 用🔥📈💡✨🎯等表情符号标记热度
+4. 分类展示：
+   🔥 热搜爆款（最热门的3-5个）
+   📈 持续热议（讨论度高的）
+   💡 新鲜话题（刚出现的）
+   🎯 校园相关（学生关心的）
+5. 最后提示用户可以去百度热搜官网查看实时详情"""
     
-    response += """
+    response = call_deepseek([{"role": "user", "content": prompt}], "tongyan", False, None)
+    return response if response else get_hot_search_fallback()
+
+def get_hot_search_fallback():
+    return f"""🔥 **查看今日热点**
+
+💡 想了解最新热点，你可以：
+
+### 🔗 [点击查看百度热搜榜](https://top.baidu.com)
+### 🔗 [点击查看微博热搜榜](https://s.weibo.com/top/summary)
+
 ---
-💡 **小提示**：
-- 点击标题可查看详情
-- 数据实时更新
-- 想了解某个话题？直接问我！
-"""
-    return response
-# ========== 官网新闻提取功能（简化版，避免云端超时） ==========
+
+**或者直接问我具体话题**，比如：
+- "AI有什么新闻？"
+- "最近有什么好看的电影？"
+- "科技圈有什么大事？"
+- "教育领域有什么新政策？"
+
+我会根据我的知识为你解答！"""
+
+# ========== 官网新闻提取功能 ==========
 def fetch_news_from_website():
-    """从学校官网提取最新新闻 - 简化版，快速失败"""
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        # 只尝试通知公告页面
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         url = f"{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm"
-        
         response = requests.get(url, headers=headers, timeout=5)
-        
         if response.status_code != 200:
             return None
-        
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        
         all_news = []
-        
         for link in soup.find_all('a', href=True):
             title = link.get_text(strip=True)
             href = link['href']
-            
             if (len(title) > 8 and len(title) < 100 and 
                 any(word in title for word in ['通知', '公告', '公示', '关于', '开展', '举办'])):
-                
                 if href.startswith('/'):
                     href = SCHOOL_OFFICIAL_URL + href
                 elif not href.startswith('http'):
                     href = SCHOOL_OFFICIAL_URL + '/' + href
-                
                 if not any(n['title'] == title for n in all_news):
                     all_news.append({'title': title, 'link': href})
-                    
             if len(all_news) >= 6:
                 break
-        
         return all_news[:6] if all_news else None
-        
     except Exception as e:
         print(f"新闻提取失败: {e}")
         return None
 
 def get_news_fallback_response():
-    """当无法抓取官网时，返回备用链接和提示"""
     return f"""📢 **查看学校最新通知和新闻**
 
-请访问以下官方渠道：
+**🔗 通知公告** {SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm
 
-**🔗 通知公告（推荐）**
-{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm
+**🔗 学校官网首页** {SCHOOL_OFFICIAL_URL}
 
-**🔗 学校官网首页**
-{SCHOOL_OFFICIAL_URL}
-
-**🔗 教务系统（课表/成绩）**
-{COURSE_SYSTEM_URL}
-
-💡 学校的重要通知、活动安排、考试信息都会在上面发布，建议定期查看~
-
-有什么其他问题可以继续问我！"""
+**🔗 教务系统** {COURSE_SYSTEM_URL}"""
 
 # ========== 三位学长学姐的人格设定 ==========
 PERSONAS = {
     "longbiao": {
         "name": "尔主龙彪",
-        "avatar": "校徽" if LOGO_BASE64 else "👨‍💻",
+        "avatar": "👨‍💻",
         "title": "AI应用工程师 · 组长",
         "style": "技术控、逻辑清晰、耐心解答",
         "greeting": "这个问题我来帮你分析一下...",
     },
     "qianpeng": {
         "name": "任乾鹏",
-        "avatar": "校徽" if LOGO_BASE64 else "📊",
+        "avatar": "📊",
         "title": "数据测试工程师",
         "style": "细心、严谨、数据敏感",
         "greeting": "据我整理的数据显示...",
     },
     "tongyan": {
         "name": "童妍",
-        "avatar": "校徽" if LOGO_BASE64 else "👩‍💻",
+        "avatar": "👩‍💻",
         "title": "前端开发工程师",
-        "style": "热情、细心、善于沟通",
+        "style": "热情、细心、善于沟通", 
         "greeting": "成工生活我超熟的！",
     }
 }
@@ -289,7 +178,7 @@ def select_persona(question):
 
 def get_persona_prefix(persona_key):
     persona = PERSONAS[persona_key]
-    if LOGO_BASE64 and persona['avatar'] == "校徽":
+    if LOGO_BASE64:
         return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}**\n\n> *{persona['greeting']}*\n\n"
     else:
         return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
@@ -305,7 +194,8 @@ def get_system_prompt(persona_key):
 ## 回答要求
 1. 用温暖亲切的语气
 2. 重要信息用**加粗**标注
-3. 适当使用表情符号"""
+3. 适当使用表情符号
+4. 记住之前的对话内容，保持上下文连贯"""
 
 # ========== 本地知识库 ==========
 LOCAL_KNOWLEDGE = {
@@ -318,14 +208,10 @@ LOCAL_KNOWLEDGE = {
     "校医院": "🏥 24小时值班，急诊电话：1200\n💊 校医院地址：学生公寓6栋一楼",
     "官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
     
-    # 教务系统相关
-    "课表": f"📅 **课表查询**\n\n请点击下方链接登录教务系统查看：\n\n🔗 {COURSE_SYSTEM_URL}\n\n💡 使用说明：\n1. 点击上方链接进入登录页面\n2. 使用教务系统账号密码登录\n3. 登录后即可查看个人课表",
-    
-    "成绩": f"📊 **成绩查询**\n\n请通过教务系统查询：\n🔗 {COURSE_SYSTEM_URL}\n\n登录后进入「成绩查询」模块即可查看各科考试成绩",
-    
-    "绩点": f"📈 **绩点(GPA)查询**\n\n教务系统链接：{COURSE_SYSTEM_URL}\n\n💡 登录后可查看各科绩点",
-    
-    "教务系统": f"🎓 **教务系统入口**\n\n地址：{COURSE_SYSTEM_URL}\n\n功能包括：选课、课表查询、成绩查询、考试安排",
+    "课表": f"📅 **课表查询**\n\n🔗 {COURSE_SYSTEM_URL}",
+    "成绩": f"📊 **成绩查询**\n\n🔗 {COURSE_SYSTEM_URL}",
+    "绩点": f"📈 **绩点查询**\n\n🔗 {COURSE_SYSTEM_URL}",
+    "教务系统": f"🎓 **教务系统**\n\n🔗 {COURSE_SYSTEM_URL}",
 }
 
 def get_local_answer(question):
@@ -356,7 +242,8 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
     if search_context:
         full_messages.append({"role": "user", "content": f"参考信息：\n{search_context}"})
     
-    full_messages.extend(messages)
+    recent_messages = messages[-30:] if len(messages) > 30 else messages
+    full_messages.extend(recent_messages)
     
     try:
         response = client.chat.completions.create(
@@ -375,29 +262,19 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
-    # ===== 百度热点查询 =====
-    if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "最近什么火", "热搜榜", "今日热点"]):
-        with st.spinner("正在获取百度热搜..."):
-            hot_list = fetch_baidu_hot_search(15)
-            if hot_list:
-                formatted = format_hot_search_response(hot_list)
-                if formatted:
-                    return formatted
-            return "😅 暂时无法获取热搜数据，请稍后再试～"
+    if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "最近什么火", "热搜榜", "今日热点", "trending"]):
+        with st.spinner("AI正在为你整理热点话题..."):
+            return get_ai_hot_trending(user_input)
     
-    # 教务系统链接查询
     if any(word in lower for word in ["课表", "课程表", "成绩", "绩点", "gpa", "教务系统", "选课系统", "成绩查询", "查成绩", "看成绩", "我的成绩"]):
         local_answer = get_local_answer(user_input)
         if local_answer:
             return local_answer
     
-    # 官网链接查询
     if any(word in lower for word in ["官网链接", "官网地址", "学校官网", "学校网站", "学校网址"]):
         return f"🌐 {SCHOOL_NAME}官方网站：\n\n{SCHOOL_OFFICIAL_URL}\n\n你可以点击访问了解学校最新动态~"
     
-    # 官网新闻/通知提取（快速失败版）
     if any(word in lower for word in ["新闻", "通知", "公告", "最新", "最近", "有什么活动", "学校有什么", "校园新闻", "近期活动", "学校动态"]):
-        # 尝试快速抓取，失败则返回备用链接
         try:
             with st.spinner("正在获取官网信息..."):
                 news = fetch_news_from_website()
@@ -408,30 +285,33 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
                     return news_text
         except:
             pass
-        # 返回备用方案
         return get_news_fallback_response()
     
-    # 代码生成
     if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
         full_prompt = f"请生成完整的代码：{user_input}\n要求：完整、有注释、可运行，用```语言名```格式。"
         response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
         return response if response else "代码生成暂时不可用"
     
-    # 表格生成
     elif any(w in lower for w in ["表格", "表", "成绩单", "课程表"]):
         full_prompt = f"请生成Markdown表格：{user_input}\n要求：标准格式，包含列名和示例数据。"
         response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
         return response if response else "表格生成暂时不可用"
     
-    # 普通问答
     else:
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
-            sr = search_online(user_input)
-            if sr:
-                search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
+            try:
+                with DDGS() as ddgs:
+                    results = list(ddgs.text(user_input, max_results=2))
+                    if results:
+                        search_ctx = "\n".join([f"- {r['title']}: {r['body'][:200]}" for r in results])
+            except:
+                pass
         
-        response = call_deepseek([{"role": "user", "content": user_input}], persona_key, enable_thinking, search_ctx)
+        history_messages = st.session_state.messages[-30:] if len(st.session_state.messages) > 30 else st.session_state.messages
+        messages_for_api = [{"role": msg["role"], "content": msg["content"]} for msg in history_messages]
+        
+        response = call_deepseek(messages_for_api, persona_key, enable_thinking, search_ctx)
         
         if response:
             return response
@@ -439,7 +319,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             local = get_local_answer(user_input)
             return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 课表查询\n- 成绩查询\n- 学校有什么新闻？\n- 今天有什么热点？"
 
-# ========== CSS 样式（移动端优化 + 侧边栏折叠） ==========
+# ========== CSS样式（完整版，不隐藏侧边栏）==========
 st.markdown("""
 <style>
     #MainMenu, header, footer {visibility: hidden;}
@@ -452,7 +332,6 @@ st.markdown("""
             margin: 0 auto;
             padding: 1rem 1rem 5rem 1rem;
         }
-        
         .mobile-bottom-nav {
             display: none !important;
         }
@@ -463,7 +342,6 @@ st.markdown("""
         .main .block-container {
             padding: 0.5rem 0.8rem 70px 0.8rem !important;
         }
-        
         .mobile-bottom-nav {
             position: fixed;
             bottom: 0;
@@ -478,7 +356,6 @@ st.markdown("""
             backdrop-filter: blur(10px);
             background: rgba(255,255,255,0.95);
         }
-        
         .nav-item {
             display: flex;
             flex-direction: column;
@@ -493,16 +370,13 @@ st.markdown("""
             border-radius: 12px;
             transition: all 0.2s;
         }
-        
         .nav-item:hover, .nav-item.active {
             background: #f0f0f0;
             color: #1a4d8c;
         }
-        
         .nav-icon {
             font-size: 1.3rem;
         }
-        
         [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
             padding: 10px 14px !important;
             font-size: 0.85rem !important;
@@ -544,21 +418,35 @@ st.markdown("""
         border: 1px solid #e0e0e0 !important;
         padding: 12px 20px !important;
     }
-    
+           /* 强制侧边栏显示 - 固定侧边栏 */
     [data-testid="stSidebar"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
         background: #ffffff;
         border-right: 1px solid #e6e6e6;
+        width: 280px !important;
+        min-width: 280px !important;
     }
     
-    pre {
-        background: #1e1e2e;
-        border-radius: 12px;
-        padding: 12px;
-        overflow-x: auto;
+    /* 确保侧边栏内容可见 */
+    [data-testid="stSidebar"] * {
+        display: block;
+        visibility: visible;
+    }
+    
+    /* 调整主内容区域，为侧边栏留出空间 */
+    .main .block-container {
+        margin-left: 300px !important;
+        max-width: calc(100% - 300px) !important;
+    }
+    
+    /* 隐藏侧边栏收起按钮 */
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
     }
 </style>
 
-<!-- 移动端底部导航栏 -->
 <div class="mobile-bottom-nav" id="mobileNav">
     <a href="#" class="nav-item" onclick="sendMessage('图书馆几点开门？'); return false;">
         <span class="nav-icon">📚</span>
@@ -572,7 +460,7 @@ st.markdown("""
         <span class="nav-icon">📊</span>
         <span>成绩</span>
     </a>
-    <a href="#" class="nav-item" onclick="sendMessage('百度热搜'); return false;">
+    <a href="#" class="nav-item" onclick="sendMessage('今日热点'); return false;">
         <span class="nav-icon">🔥</span>
         <span>热搜</span>
     </a>
@@ -595,7 +483,7 @@ function sendMessage(msg) {
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 侧边栏 ==========
+# ========== 侧边栏（完整功能）==========
 with st.sidebar:
     if LOGO_PATH:
         try:
@@ -609,49 +497,22 @@ with st.sidebar:
     st.markdown(f"*{SCHOOL_MOTTO}*")
     st.markdown("---")
     
-    # 模式设置
+    # 对话历史统计
+    msg_count = len(st.session_state.get("messages", []))
+    st.caption(f"📝 对话历史: {msg_count} 条")
+    st.caption("✨ AI可记住最近30条")
+    st.markdown("---")
+    
     enable_thinking = st.toggle("🧠 深度思考模式", value=False)
     enable_search = st.toggle("🌐 联网搜索", value=False)
     
     st.markdown("---")
     st.markdown("### 🔥 热点板块")
-    show_hot_search = st.toggle("📊 显示百度热搜", value=True)
-    
-    # 热点展示区域
-    if show_hot_search:
-        st.markdown("---")
-        st.markdown("#### 🔥 热搜榜")
-        
-        # 使用缓存减少API调用（每5分钟更新一次）
-        @st.cache_data(ttl=300)
-        def get_cached_hot_search():
-            return fetch_baidu_hot_search(10)
-        
-        hot_data = get_cached_hot_search()
-        if hot_data:
-            for idx, item in enumerate(hot_data[:8], 1):
-                keyword = item.get('keyword', '')[:25]
-                href = item.get('href', '')
-                
-                if idx <= 3:
-                    icon = "🔥"
-                else:
-                    icon = "📌"
-                
-                if href:
-                    st.markdown(f"{icon} {idx}. [{keyword}]({href})")
-                else:
-                    st.markdown(f"{icon} {idx}. {keyword}")
-            
-            # 更新时间
-            now = datetime.now().strftime("%H:%M")
-            st.caption(f"⏰ 更新 {now} | 点击查看详情")
-        else:
-            st.info("暂无法获取热搜数据")
+    st.info("💡 问我「今日热点」即可获取AI整理的热点话题！")
     
     st.markdown("---")
     
-    # 学校官网按钮
+    # 学校官网按钮（HTML样式）
     st.markdown(f"""
     <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
         display: block;
@@ -718,7 +579,7 @@ if "messages" not in st.session_state:
 - 📅 **课表查询** → 教务系统链接
 - 📊 **成绩查询** → 查看考试成绩和绩点
 - 🏫 **学校官网** → 了解学校动态
-- 🔥 **百度热搜** → 查看今日热点
+- 🔥 **今日热点** → AI智能整理热点话题
 
 **试试问我：**
 - "图书馆几点开门？"
@@ -726,6 +587,8 @@ if "messages" not in st.session_state:
 - "我的成绩"
 - "今天有什么热点？"
 - "用Python写一个计算器"
+
+💡 **新功能**：我可以记住最近30条对话，连续聊天更流畅！
 
 有什么问题尽管问！😊"""
     })
