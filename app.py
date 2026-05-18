@@ -324,7 +324,18 @@ st.markdown("""
 <style>
     #MainMenu, header, footer {visibility: hidden;}
     .stApp {background: #fafafc;}
-    
+    /* 强制侧边栏始终显示，覆盖浏览器缓存状态 */
+    [data-testid="stSidebar"] {
+        display: block !important;
+        transform: translateX(0px) !important;
+        width: 280px !important;
+        min-width: 280px !important;
+    }
+
+    /* 隐藏收起按钮，防止再次收起 */
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
     /* 桌面端样式 */
     @media (min-width: 769px) {
         .main .block-container {
