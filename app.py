@@ -324,73 +324,66 @@ st.markdown("""
 <style>
     #MainMenu, header, footer {visibility: hidden;}
     .stApp {background: #fafafc;}
-    /* 强制侧边栏始终显示，覆盖浏览器缓存状态 */
-    [data-testid="stSidebar"] {
-        display: block !important;
-        transform: translateX(0px) !important;
-        width: 280px !important;
-        min-width: 280px !important;
-    }
-
-    /* 隐藏收起按钮，防止再次收起 */
-    [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
+    
     /* 桌面端样式 */
     @media (min-width: 769px) {
         .main .block-container {
             max-width: 900px;
             margin: 0 auto;
-            padding: 1rem 1rem 5rem 1rem;
+            padding: 1rem 2rem 5rem 2rem;
         }
+        
         .mobile-bottom-nav {
             display: none !important;
+        }
+        
+        /* 桌面端侧边栏正常显示 */
+        [data-testid="stSidebar"] {
+            background: #ffffff;
+            border-right: 1px solid #e6e6e6;
+            width: 280px;
+            min-width: 280px;
         }
     }
     
     /* 移动端样式 */
     @media (max-width: 768px) {
+        /* 移动端隐藏侧边栏，用底部导航栏代替 */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+        
+        /* 主内容区域全屏显示 */
         .main .block-container {
-            padding: 0.5rem 0.8rem 70px 0.8rem !important;
+            padding: 0.5rem 0.8rem 80px 0.8rem !important;
+            max-width: 100% !important;
+            margin: 0 !important;
         }
-        .mobile-bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: white;
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 12px;
-            border-top: 1px solid #e0e0e0;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-            background: rgba(255,255,255,0.95);
-        }
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            text-decoration: none;
-            color: #666;
-            font-size: 0.7rem;
-            flex: 1;
-            text-align: center;
-            padding: 6px 0;
-            border-radius: 12px;
-            transition: all 0.2s;
-        }
-        .nav-item:hover, .nav-item.active {
-            background: #f0f0f0;
-            color: #1a4d8c;
-        }
-        .nav-icon {
-            font-size: 1.3rem;
-        }
+        
+        /* 消息气泡 */
         [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
             padding: 10px 14px !important;
             font-size: 0.85rem !important;
+            max-width: 85%;
+        }
+        
+        /* 输入框 */
+        .stChatInput {
+            position: fixed;
+            bottom: 65px;
+            left: 0;
+            right: 0;
+            background: #fafafc;
+            padding: 8px 12px;
+            z-index: 100;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .stChatInput textarea {
+            border-radius: 28px !important;
+            border: 1px solid #e0e0e0 !important;
+            padding: 12px 16px !important;
+            font-size: 0.9rem !important;
         }
     }
     
@@ -400,7 +393,6 @@ st.markdown("""
         border-radius: 20px;
         font-size: 0.95rem;
         line-height: 1.6;
-        word-wrap: break-word;
     }
     
     [data-testid="stChatMessage"][data-testid="user"] [data-testid="stMarkdown"] {
@@ -416,48 +408,49 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     
-    .stChatInput {
-        position: sticky;
-        bottom: 0;
-        background: #fafafc;
-        padding-top: 8px;
-        z-index: 100;
-    }
-    
-    .stChatInput textarea {
-        border-radius: 28px !important;
-        border: 1px solid #e0e0e0 !important;
-        padding: 12px 20px !important;
-    }
-           /* 强制侧边栏显示 - 固定侧边栏 */
-    [data-testid="stSidebar"] {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        background: #ffffff;
-        border-right: 1px solid #e6e6e6;
-        width: 280px !important;
-        min-width: 280px !important;
-    }
-    
-    /* 确保侧边栏内容可见 */
-    [data-testid="stSidebar"] * {
-        display: block;
-        visibility: visible;
-    }
-    
-    /* 调整主内容区域，为侧边栏留出空间 */
-    .main .block-container {
-        margin-left: 300px !important;
-        max-width: calc(100% - 300px) !important;
-    }
-    
-    /* 隐藏侧边栏收起按钮 */
-    [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
+    pre {
+        background: #1e1e2e;
+        border-radius: 12px;
+        padding: 12px;
+        overflow-x: auto;
     }
 </style>
 
+<!-- 移动端底部导航栏 -->
+<div class="mobile-bottom-nav" id="mobileNav">
+    <a href="#" class="nav-item" onclick="sendMessage('图书馆几点开门？'); return false;">
+        <span class="nav-icon">📚</span>
+        <span>图书馆</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('课表查询'); return false;">
+        <span class="nav-icon">📅</span>
+        <span>课表</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('成绩查询'); return false;">
+        <span class="nav-icon">📊</span>
+        <span>成绩</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('今日热点'); return false;">
+        <span class="nav-icon">🔥</span>
+        <span>热搜</span>
+    </a>
+    <a href="#" class="nav-item" onclick="sendMessage('食堂有什么好吃的？'); return false;">
+        <span class="nav-icon">🍽️</span>
+        <span>食堂</span>
+    </a>
+</div>
+
+<script>
+function sendMessage(msg) {
+    const input = document.querySelector('.stChatInput textarea');
+    if (input) {
+        input.value = msg;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const button = document.querySelector('.stChatInput button');
+        if (button) button.click();
+    }
+}
+</script>
 <div class="mobile-bottom-nav" id="mobileNav">
     <a href="#" class="nav-item" onclick="sendMessage('图书馆几点开门？'); return false;">
         <span class="nav-icon">📚</span>
