@@ -1,5 +1,5 @@
 """
-成工职小助手 - 完整版（AI智能热点 + 长对话记忆）
+成工职小助手 - 双端适配版（电脑+手机）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -319,14 +319,13 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             local = get_local_answer(user_input)
             return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 食堂有什么好吃的？\n- 课表查询\n- 成绩查询\n- 学校有什么新闻？\n- 今天有什么热点？"
 
-# ========== CSS样式（完整版，不隐藏侧边栏）==========
+# ========== 双端适配CSS ==========
 st.markdown("""
 <style>
-
     #MainMenu, header, footer {visibility: hidden;}
     .stApp {background: #fafafc;}
     
-    /* 桌面端样式 */
+    /* ========== 桌面端样式 ========== */
     @media (min-width: 769px) {
         .main .block-container {
             max-width: 900px;
@@ -334,44 +333,116 @@ st.markdown("""
             padding: 1rem 2rem 5rem 2rem;
         }
         
-        .mobile-bottom-nav {
-            display: none !important;
-        }
-        
-        /* 桌面端侧边栏正常显示 */
+        /* 桌面端显示侧边栏 */
         [data-testid="stSidebar"] {
             background: #ffffff;
             border-right: 1px solid #e6e6e6;
             width: 280px;
             min-width: 280px;
+            display: block !important;
+        }
+        
+        /* 桌面端隐藏移动端底部导航 */
+        .mobile-bottom-nav {
+            display: none !important;
+        }
+        
+        /* 桌面端隐藏移动端快捷按钮 */
+        .mobile-quick-buttons {
+            display: none !important;
         }
     }
     
-    /* 移动端样式 */
+    /* ========== 移动端样式 ========== */
     @media (max-width: 768px) {
-        /* 移动端隐藏侧边栏，用底部导航栏代替 */
+        /* 移动端隐藏侧边栏 */
         [data-testid="stSidebar"] {
             display: none !important;
         }
         
-        /* 主内容区域全屏显示 */
         .main .block-container {
             padding: 0.5rem 0.8rem 80px 0.8rem !important;
             max-width: 100% !important;
-            margin: 0 !important;
         }
         
-        /* 消息气泡 */
+        /* 移动端快捷按钮 */
+        .mobile-quick-buttons {
+            display: flex !important;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 1rem;
+            justify-content: center;
+        }
+        
+        .quick-btn {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 30px;
+            padding: 6px 14px;
+            font-size: 0.75rem;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .quick-btn:active {
+            background: #1a4d8c;
+            color: white;
+        }
+        
+        /* 移动端底部导航栏 */
+        .mobile-bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            display: flex !important;
+            justify-content: space-around;
+            padding: 8px 12px;
+            padding-bottom: calc(8px + env(safe-area-inset-bottom));
+            border-top: 1px solid #e0e0e0;
+            z-index: 1000;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            text-decoration: none;
+            color: #666;
+            font-size: 0.7rem;
+            flex: 1;
+            text-align: center;
+            padding: 6px 0;
+            border-radius: 12px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .nav-item:active {
+            background: #f0f0f0;
+            transform: scale(0.95);
+        }
+        
+        .nav-icon {
+            font-size: 1.3rem;
+        }
+        
+        /* 移动端消息气泡 */
         [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
             padding: 10px 14px !important;
             font-size: 0.85rem !important;
             max-width: 85%;
         }
         
-        /* 输入框 */
+        /* 移动端输入框 */
         .stChatInput {
             position: fixed;
-            bottom: 65px;
+            bottom: 60px;
             left: 0;
             right: 0;
             background: #fafafc;
@@ -388,12 +459,13 @@ st.markdown("""
         }
     }
     
-    /* 消息气泡通用 */
+    /* ========== 通用样式 ========== */
     [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
         padding: 12px 18px;
         border-radius: 20px;
         font-size: 0.95rem;
         line-height: 1.6;
+        word-wrap: break-word;
     }
     
     [data-testid="stChatMessage"][data-testid="user"] [data-testid="stMarkdown"] {
@@ -415,64 +487,49 @@ st.markdown("""
         padding: 12px;
         overflow-x: auto;
     }
+    
+    .stChatInput textarea {
+        border-radius: 28px !important;
+        border: 1px solid #e0e0e0 !important;
+        padding: 12px 20px !important;
+    }
+    
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
 </style>
 
 <!-- 移动端底部导航栏 -->
-<div class="mobile-bottom-nav" id="mobileNav">
-    <a href="#" class="nav-item" onclick="sendMessage('图书馆几点开门？'); return false;">
+<div class="mobile-bottom-nav">
+    <button class="nav-item" onclick="sendMessage('图书馆几点开门？')">
         <span class="nav-icon">📚</span>
         <span>图书馆</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('课表查询'); return false;">
+    </button>
+    <button class="nav-item" onclick="sendMessage('课表查询')">
         <span class="nav-icon">📅</span>
         <span>课表</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('成绩查询'); return false;">
+    </button>
+    <button class="nav-item" onclick="sendMessage('成绩查询')">
         <span class="nav-icon">📊</span>
         <span>成绩</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('今日热点'); return false;">
+    </button>
+    <button class="nav-item" onclick="sendMessage('今日热点')">
         <span class="nav-icon">🔥</span>
         <span>热搜</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('食堂有什么好吃的？'); return false;">
+    </button>
+    <button class="nav-item" onclick="sendMessage('食堂有什么好吃的？')">
         <span class="nav-icon">🍽️</span>
         <span>食堂</span>
-    </a>
+    </button>
 </div>
 
-<script>
-function sendMessage(msg) {
-    const input = document.querySelector('.stChatInput textarea');
-    if (input) {
-        input.value = msg;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        const button = document.querySelector('.stChatInput button');
-        if (button) button.click();
-    }
-}
-</script>
-<div class="mobile-bottom-nav" id="mobileNav">
-    <a href="#" class="nav-item" onclick="sendMessage('图书馆几点开门？'); return false;">
-        <span class="nav-icon">📚</span>
-        <span>图书馆</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('课表查询'); return false;">
-        <span class="nav-icon">📅</span>
-        <span>课表</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('成绩查询'); return false;">
-        <span class="nav-icon">📊</span>
-        <span>成绩</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('今日热点'); return false;">
-        <span class="nav-icon">🔥</span>
-        <span>热搜</span>
-    </a>
-    <a href="#" class="nav-item" onclick="sendMessage('食堂有什么好吃的？'); return false;">
-        <span class="nav-icon">🍽️</span>
-        <span>食堂</span>
-    </a>
+<!-- 移动端快捷按钮 -->
+<div class="mobile-quick-buttons">
+    <span class="quick-btn" onclick="sendMessage('图书馆几点开门？')">📚 图书馆</span>
+    <span class="quick-btn" onclick="sendMessage('食堂有什么好吃的？')">🍽️ 食堂</span>
+    <span class="quick-btn" onclick="sendMessage('课表查询')">📅 课表</span>
+    <span class="quick-btn" onclick="sendMessage('成绩查询')">📊 成绩</span>
+    <span class="quick-btn" onclick="sendMessage('今日热点')">🔥 热点</span>
 </div>
 
 <script>
@@ -488,7 +545,7 @@ function sendMessage(msg) {
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 侧边栏（完整功能）==========
+# ========== 侧边栏（桌面端显示）==========
 with st.sidebar:
     if LOGO_PATH:
         try:
@@ -517,7 +574,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 学校官网按钮（HTML样式）
+    # 学校官网按钮
     st.markdown(f"""
     <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
         display: block;
@@ -534,7 +591,6 @@ with st.sidebar:
     ">🏫 学校官网</a>
     """, unsafe_allow_html=True)
     
-    # 教务系统按钮
     st.markdown(f"""
     <a href="{COURSE_SYSTEM_URL}" target="_blank" style="
         display: block;
@@ -603,7 +659,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ========== 快捷问题 ==========
+# ========== 桌面端快捷问题 ==========
 quick_cols = st.columns(5)
 quick_list = ["📚 图书馆几点开门", "🍽️ 食堂推荐", "📅 课表查询", "📊 成绩查询", "🔥 今日热点"]
 
