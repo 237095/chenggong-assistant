@@ -1,5 +1,5 @@
 """
-成工职小助手 - 手机端优化版
+成工职小助手 - 手机端完整版
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -59,7 +59,7 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== AI智能热点获取功能（完整版） ==========
+# ========== AI智能热点获取功能 ==========
 def get_ai_hot_trending(user_query):
     prompt = f"""用户问：{user_query}
 
@@ -71,12 +71,10 @@ def get_ai_hot_trending(user_query):
 3. 用🔥📈💡✨🎯等表情符号标记热度
 4. 分类展示：
    🔥 热搜爆款（最热门的3-5个）
-   📈 持续热议（讨论度高的）
-   💡 新鲜话题（刚出现的）
-   🎯 校园相关（学生关心的）
-5. 最后提示用户可以去百度热搜官网查看实时详情
-
-注意：结合你的知识给出合理的热点推荐，越贴近学生生活越好。"""
+   📈 持续热议
+   💡 新鲜话题
+   🎯 校园相关
+5. 最后提示用户可以去百度热搜官网查看实时详情"""
     
     response = call_deepseek([{"role": "user", "content": prompt}], "tongyan", False, None)
     return response if response else get_hot_search_fallback()
@@ -93,9 +91,7 @@ def get_hot_search_fallback():
 **或者直接问我具体话题**，比如：
 - "AI有什么新闻？"
 - "最近有什么好看的电影？"
-- "科技圈有什么大事？"
-
-我会根据我的知识为你解答！"""
+- "科技圈有什么大事？" """
 
 # ========== 官网新闻提取功能 ==========
 def fetch_news_from_website():
@@ -134,21 +130,18 @@ PERSONAS = {
     "longbiao": {
         "name": "尔主龙彪",
         "avatar": "👨‍💻",
-        "title": "AI应用工程师 · 组长",
         "style": "技术控、逻辑清晰",
         "greeting": "我来帮你分析一下...",
     },
     "qianpeng": {
         "name": "任乾鹏",
         "avatar": "📊",
-        "title": "数据测试工程师",
         "style": "细心、严谨",
         "greeting": "数据显示...",
     },
     "tongyan": {
         "name": "童妍",
         "avatar": "👩‍💻",
-        "title": "前端开发工程师",
         "style": "热情、细心", 
         "greeting": "成工生活我超熟的！",
     }
@@ -165,10 +158,7 @@ def select_persona(question):
 
 def get_persona_prefix(persona_key):
     persona = PERSONAS[persona_key]
-    if LOGO_BASE64:
-        return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}**\n\n> *{persona['greeting']}*\n\n"
-    else:
-        return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
+    return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
 
 def get_system_prompt(persona_key):
     persona = PERSONAS[persona_key]
@@ -228,11 +218,11 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
-    if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "最近什么火", "热搜榜", "今日热点", "trending"]):
+    if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "今日热点"]):
         with st.spinner("AI正在整理热点..."):
             return get_ai_hot_trending(user_input)
     
-    if any(word in lower for word in ["课表", "课程表", "成绩", "绩点", "教务系统", "成绩查询"]):
+    if any(word in lower for word in ["课表", "成绩", "绩点", "教务系统"]):
         local_answer = get_local_answer(user_input)
         if local_answer:
             return local_answer
@@ -253,8 +243,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         return get_news_fallback_response()
     
     if any(w in lower for w in ["python", "java", "代码", "编程"]):
-        full_prompt = f"生成代码：{user_input}"
-        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
+        response = call_deepseek([{"role": "user", "content": f"生成代码：{user_input}"}], persona_key, enable_thinking, None)
         return response if response else "代码生成暂时不可用"
     
     else:
@@ -279,72 +268,80 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             local = get_local_answer(user_input)
             return local if local else f"抱歉，无法回答「{user_input}」。试试问：图书馆几点开门？"
 
-# ========== 手机端优化CSS ==========
-st.markdown("""
+# ========== 手机端CSS（带校徽） ==========
+# 生成校徽HTML
+logo_html = ""
+if LOGO_BASE64:
+    logo_html = f'''
+    <div style="display: flex; justify-content: center; margin-bottom: 0.5rem;">
+        <img src="data:image/png;base64,{LOGO_BASE64}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    </div>
+    '''
+
+st.markdown(f"""
 <style>
     /* 隐藏默认元素 */
-    #MainMenu, header, footer {visibility: hidden;}
-    .stApp {background: #f5f7fb;}
+    #MainMenu, header, footer {{visibility: hidden;}}
+    .stApp {{background: #f5f7fb;}}
     
     /* 主容器 */
-    .main .block-container {
+    .main .block-container {{
         padding: 0.5rem 0.8rem 70px 0.8rem !important;
         max-width: 100% !important;
-    }
+    }}
     
     /* 隐藏侧边栏 */
-    [data-testid="stSidebar"] {
+    [data-testid="stSidebar"] {{
         display: none !important;
-    }
+    }}
     
-    /* ========== 顶部标题区 ========== */
-    .app-header {
+    /* ========== 顶部标题区（带校徽）========== */
+    .app-header {{
         text-align: center;
-        padding: 0.3rem 0 0.8rem 0;
-        margin-bottom: 0.3rem;
-        border-bottom: 1px solid #e8e8e8;
-    }
+        padding: 0.5rem 0 1rem 0;
+        margin-bottom: 0.5rem;
+        background: white;
+        border-radius: 20px;
+        margin-top: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }}
     
-    .app-title {
-        font-size: 1rem;
-        font-weight: 600;
+    .school-name {{
+        font-size: 1.1rem;
+        font-weight: bold;
         color: #1a4d8c;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-    }
+        margin: 0.3rem 0 0.2rem 0;
+    }}
     
-    .app-motto {
+    .school-motto {{
         font-size: 0.6rem;
         color: #aaa;
-        margin-top: 2px;
-    }
+    }}
     
-    /* ========== 快捷按钮区域（2行布局）========== */
-    .quick-section {
+    /* ========== 快捷按钮区域 ========== */
+    .quick-section {{
         background: white;
         border-radius: 16px;
-        padding: 10px 12px;
+        padding: 12px;
         margin-bottom: 12px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
+    }}
     
-    .quick-title {
+    .quick-title {{
         font-size: 0.7rem;
         color: #888;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
         font-weight: 500;
-    }
+    }}
     
-    .quick-grid {
+    .quick-grid {{
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-    }
+        gap: 10px;
+    }}
     
-    .quick-item {
-        background: #f8f9fa;
+    .quick-item {{
+        background: #f0f2f6;
         border: none;
         border-radius: 30px;
         padding: 8px 0;
@@ -353,46 +350,46 @@ st.markdown("""
         cursor: pointer;
         transition: all 0.2s;
         color: #333;
-    }
+    }}
     
-    .quick-item:active {
+    .quick-item:active {{
         background: #1a4d8c;
         color: white;
         transform: scale(0.96);
-    }
+    }}
     
     /* ========== 消息气泡 ========== */
-    [data-testid="stChatMessage"] {
+    [data-testid="stChatMessage"] {{
         margin-bottom: 0.6rem;
-    }
+    }}
     
-    [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
+    [data-testid="stChatMessage"] [data-testid="stMarkdown"] {{
         padding: 10px 14px !important;
         font-size: 0.85rem !important;
         line-height: 1.45 !important;
         max-width: 88% !important;
-    }
+    }}
     
-    [data-testid="stChatMessage"][data-testid="user"] {
+    [data-testid="stChatMessage"][data-testid="user"] {{
         display: flex;
         justify-content: flex-end;
-    }
+    }}
     
-    [data-testid="stChatMessage"][data-testid="user"] [data-testid="stMarkdown"] {
+    [data-testid="stChatMessage"][data-testid="user"] [data-testid="stMarkdown"] {{
         background: linear-gradient(135deg, #1a4d8c 0%, #2d6a4f 100%);
         color: white;
         border-radius: 18px 18px 4px 18px !important;
-    }
+    }}
     
-    [data-testid="stChatMessage"][data-testid="assistant"] [data-testid="stMarkdown"] {
+    [data-testid="stChatMessage"][data-testid="assistant"] [data-testid="stMarkdown"] {{
         background: white;
         color: #333;
         border-radius: 18px 18px 18px 4px !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
+    }}
     
     /* ========== 输入框 ========== */
-    .stChatInput {
+    .stChatInput {{
         position: fixed;
         bottom: 0;
         left: 0;
@@ -402,18 +399,18 @@ st.markdown("""
         padding-bottom: calc(10px + env(safe-area-inset-bottom));
         border-top: 1px solid #e8e8e8;
         z-index: 100;
-    }
+    }}
     
-    .stChatInput textarea {
+    .stChatInput textarea {{
         border-radius: 25px !important;
         border: 1px solid #e0e0e0 !important;
         padding: 10px 16px !important;
         font-size: 0.85rem !important;
         background: #f8f9fa;
-    }
+    }}
     
     /* ========== 底部导航栏 ========== */
-    .bottom-nav {
+    .bottom-nav {{
         position: fixed;
         bottom: 0;
         left: 0;
@@ -426,9 +423,9 @@ st.markdown("""
         border-top: 1px solid #e8e8e8;
         z-index: 99;
         box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
-    }
+    }}
     
-    .nav-item {
+    .nav-item {{
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -442,40 +439,39 @@ st.markdown("""
         cursor: pointer;
         padding: 4px 0;
         border-radius: 8px;
-    }
+    }}
     
-    .nav-item:active {
+    .nav-item:active {{
         background: #f0f0f0;
         color: #1a4d8c;
-    }
+    }}
     
-    .nav-icon {
+    .nav-icon {{
         font-size: 1.2rem;
-    }
+    }}
     
     /* ========== 高级设置 ========== */
-    .streamlit-expanderHeader {
+    .streamlit-expanderHeader {{
         font-size: 0.75rem;
         background: white;
         border-radius: 20px;
-    }
+    }}
     
     /* ========== 代码块 ========== */
-    pre {
+    pre {{
         background: #1e1e2e;
         border-radius: 10px;
         padding: 10px;
         font-size: 0.7rem;
         overflow-x: auto;
-    }
+    }}
 </style>
 
-<!-- 顶部标题 -->
+<!-- 顶部标题区（带校徽） -->
 <div class="app-header">
-    <div class="app-title">
-        <span>🎓</span> 成工职小助手
-    </div>
-    <div class="app-motto">立德树人 · 精工强技</div>
+    {logo_html}
+    <div class="school-name">🎓 {SCHOOL_NAME}</div>
+    <div class="school-motto">{SCHOOL_MOTTO}</div>
 </div>
 
 <!-- 快捷按钮区域 -->
@@ -522,7 +518,7 @@ function sendMsg(msg) {
     const input = document.querySelector('.stChatInput textarea');
     if (input) {
         input.value = msg;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('input', {{ bubbles: true }}));
         const btn = document.querySelector('.stChatInput button');
         if (btn) btn.click();
     }
@@ -535,21 +531,30 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({
         "role": "assistant",
-        "content": f"""👋 你好！我是成工职小助手
+        "content": f"""# 🎓 {SCHOOL_NAME} - 成工职小助手
 
-由三位学长学姐为你服务：
+你好呀！我是由三位学长学姐共同组成的AI助手：
 
-👨‍💻 **尔主龙彪学长** - AI、编程
-📊 **任乾鹏学长** - 成绩、课表  
-👩‍💻 **童妍学姐** - 校园生活
+- 👨‍💻 **尔主龙彪学长**：AI、编程、选课
+- 📊 **任乾鹏学长**：数据分析、表格、成绩查询
+- 👩‍💻 **童妍学姐**：校园生活、社团
 
 ---
 
+**📌 快捷功能：**
+- 📅 **课表查询** → 教务系统链接
+- 📊 **成绩查询** → 查看考试成绩和绩点
+- 🏫 **学校官网** → 了解学校动态
+- 🔥 **今日热点** → AI智能整理热点话题
+
 **试试问我：**
-• "图书馆几点开门？"
-• "课表查询"
-• "我的成绩"
-• "今天有什么热点？"
+- "图书馆几点开门？"
+- "课表查询"
+- "我的成绩"
+- "今天有什么热点？"
+- "用Python写一个计算器"
+
+💡 **新功能**：我可以记住最近30条对话，连续聊天更流畅！
 
 有什么问题尽管问！😊"""
     })
