@@ -1,5 +1,5 @@
 """
-成工职小助手 - 移动端极简版（类DeepSeek设计）
+成工职小助手 - 移动端 DeepSeek 风格
 成都工业职业技术学院
 """
 
@@ -58,6 +58,12 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
             LOGO_BASE64 = base64.b64encode(img_file.read()).decode()
     except:
         pass
+
+# 校徽头像HTML（如果没有图片，用🎓）
+if LOGO_BASE64:
+    AVATAR_HTML = f'<img src="data:image/png;base64,{LOGO_BASE64}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">'
+else:
+    AVATAR_HTML = '<span style="font-size: 28px;">🎓</span>'
 
 # ========== AI智能热点获取功能 ==========
 def get_ai_hot_trending(user_query):
@@ -123,7 +129,7 @@ def select_persona(question):
 
 def get_persona_prefix(persona_key):
     p = PERSONAS[persona_key]
-    return f"**{p['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {p['avatar']}\n> *{p['greeting']}*\n\n"
+    return f"**{p['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {p['avatar']}\n\n"
 
 def get_system_prompt(persona_key):
     p = PERSONAS[persona_key]
@@ -214,45 +220,54 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         local = get_local_answer(user_input)
         return local if local else f"抱歉，无法回答。试试问：图书馆几点开门？"
 
-# ========== 极简CSS（类DeepSeek设计）==========
-# 生成校徽头像
-if LOGO_BASE64:
-    avatar_html = f'<img src="data:image/png;base64,{LOGO_BASE64}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">'
-else:
-    avatar_html = '<span style="font-size: 32px;">🎓</span>'
-
+# ========== DeepSeek风格CSS ==========
 st.markdown(f"""
 <style>
     /* 隐藏所有默认元素 */
     #MainMenu, header, footer {{visibility: hidden;}}
     .stApp {{background: #ffffff;}}
     
-    /* 主容器 - 极简 */
+    /* 主容器 */
     .main .block-container {{
-        padding: 0.5rem 1rem 70px 1rem !important;
+        padding: 0.5rem 1rem 80px 1rem !important;
         max-width: 100% !important;
     }}
     
     /* 隐藏侧边栏 */
     [data-testid="stSidebar"] {{display: none !important;}}
     
-    /* 顶部标题栏 - 只显示头像和标题 */
-    .app-bar {{
+    /* ========== 顶部导航栏 ========== */
+    .top-bar {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+        margin-bottom: 16px;
+        border-bottom: 1px solid #e8e8e8;
+    }}
+    .top-left {{
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 8px 0;
-        margin-bottom: 8px;
-        border-bottom: 1px solid #f0f0f0;
     }}
-    .app-title {{
+    .menu-btn {{
+        font-size: 24px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0 8px;
+        color: #333;
+    }}
+    .title {{
         font-size: 1rem;
         font-weight: 500;
         color: #333;
     }}
     
-    /* 消息气泡 - 紧凑 */
-    [data-testid="stChatMessage"] {{margin-bottom: 0.8rem;}}
+    /* ========== 消息区域 ========== */
+    [data-testid="stChatMessage"] {{
+        margin-bottom: 1rem;
+    }}
     [data-testid="stChatMessage"] [data-testid="stMarkdown"] {{
         padding: 10px 14px !important;
         font-size: 0.85rem !important;
@@ -260,7 +275,7 @@ st.markdown(f"""
         max-width: 85% !important;
     }}
     
-    /* 用户消息 - 右对齐 */
+    /* 用户消息 */
     [data-testid="stChatMessage"][data-testid="user"] {{
         display: flex;
         justify-content: flex-end;
@@ -271,33 +286,32 @@ st.markdown(f"""
         border-radius: 18px 18px 4px 18px !important;
     }}
     
-    /* AI消息 - 左对齐，带头像 */
+    /* AI消息 - 带头像 */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         display: flex;
         align-items: flex-start;
-        gap: 8px;
+        gap: 10px;
     }}
     [data-testid="stChatMessage"][data-testid="assistant"] [data-testid="stMarkdown"] {{
         background: #f5f5f5;
         color: #333;
         border-radius: 18px 18px 18px 4px !important;
+        flex: 1;
     }}
     
     /* AI头像 */
     .ai-avatar {{
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         background: #1a4d8c;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
         flex-shrink: 0;
-        margin-top: 2px;
     }}
     
-    /* 输入框 - 固定在底部 */
+    /* ========== 输入框 ========== */
     .stChatInput {{
         position: fixed;
         bottom: 0;
@@ -317,47 +331,125 @@ st.markdown(f"""
         background: #f8f9fa;
     }}
     
-    /* 折叠菜单样式 - 简洁 */
-    .streamlit-expanderHeader {{
-        font-size: 0.75rem;
-        background: #f8f9fa;
-        border-radius: 20px;
-        padding: 6px 12px;
-        margin-bottom: 5px;
-    }}
-    .streamlit-expanderContent {{
-        background: #f8f9fa;
-        border-radius: 16px;
-        padding: 10px;
-        margin-bottom: 10px;
-    }}
-    
-    /* 快捷链接卡片 */
-    .link-card {{
+    /* ========== 侧滑菜单（隐藏，点击按钮显示）========== */
+    .side-menu {{
+        position: fixed;
+        top: 0;
+        left: -280px;
+        width: 260px;
+        height: 100%;
         background: white;
-        border-radius: 12px;
-        padding: 8px 12px;
-        margin-bottom: 8px;
-        border: 1px solid #f0f0f0;
-        font-size: 0.8rem;
+        box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+        z-index: 1000;
+        transition: left 0.3s ease;
+        padding: 20px 16px;
+        overflow-y: auto;
+    }}
+    .side-menu.open {{
+        left: 0;
+    }}
+    .menu-overlay {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.3);
+        z-index: 999;
+        display: none;
+    }}
+    .menu-overlay.open {{
+        display: block;
+    }}
+    .menu-header {{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #e8e8e8;
+        margin-bottom: 16px;
+    }}
+    .menu-item {{
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.9rem;
+    }}
+    .menu-item:active {{
+        background: #f5f5f5;
     }}
 </style>
 
-<!-- 顶部栏：AI头像 + 标题 -->
-<div class="app-bar">
-    {avatar_html}
-    <div class="app-title">{SCHOOL_NAME}</div>
+<!-- 顶部栏 -->
+<div class="top-bar">
+    <div class="top-left">
+        <button class="menu-btn" onclick="toggleMenu()">☰</button>
+        <div class="title">{SCHOOL_NAME}</div>
+    </div>
+    <div class="top-left">
+        {AVATAR_HTML}
+    </div>
 </div>
 
+<!-- 侧滑菜单 -->
+<div class="side-menu" id="sideMenu">
+    <div class="menu-header">
+        {AVATAR_HTML}
+        <div>
+            <div style="font-weight: 600;">{SCHOOL_NAME}</div>
+            <div style="font-size: 0.7rem; color: #888;">{SCHOOL_MOTTO}</div>
+        </div>
+    </div>
+    <div class="menu-item" onclick="sendAndClose('🏫 学校官网')">🏫 学校官网</div>
+    <div class="menu-item" onclick="sendAndClose('📚 教务系统')">📚 教务系统</div>
+    <div class="menu-item" onclick="sendAndClose('📊 成绩查询')">📊 成绩查询</div>
+    <div class="menu-item" onclick="sendAndClose('📅 课表查询')">📅 课表查询</div>
+    <div class="menu-item" onclick="sendAndClose('🔥 今日热点')">🔥 今日热点</div>
+    <div class="menu-item" onclick="sendAndClose('📢 通知公告')">📢 通知公告</div>
+    <div class="menu-item" onclick="sendAndClose('📖 选课')">📖 选课</div>
+    <div class="menu-item" onclick="sendAndClose('🔧 宿舍报修')">🔧 宿舍报修</div>
+    <div class="menu-item" onclick="sendAndClose('🏆 奖学金')">🏆 奖学金</div>
+    <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid #e8e8e8;">
+        <div class="menu-item" onclick="toggleMenu()">⚙️ 高级设置</div>
+    </div>
+    <div style="margin-top: 20px; font-size: 0.7rem; color: #aaa; text-align: center;">
+        开发团队：尔主龙彪、任乾鹏、童妍
+    </div>
+</div>
+<div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+
 <script>
-// 为每条AI消息添加头像
+function toggleMenu() {{
+    const menu = document.getElementById('sideMenu');
+    const overlay = document.getElementById('menuOverlay');
+    menu.classList.toggle('open');
+    overlay.classList.toggle('open');
+}}
+
+function sendAndClose(msg) {{
+    toggleMenu();
+    setTimeout(() => {{
+        const input = document.querySelector('.stChatInput textarea');
+        if (input) {{
+            input.value = msg;
+            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            const btn = document.querySelector('.stChatInput button');
+            if (btn) btn.click();
+        }}
+    }}, 300);
+}}
+
+// 为AI消息添加头像
 function addAvatars() {{
     const messages = document.querySelectorAll('[data-testid="stChatMessage"][data-testid="assistant"]');
     messages.forEach(msg => {{
         if (!msg.querySelector('.ai-avatar')) {{
             const avatar = document.createElement('div');
             avatar.className = 'ai-avatar';
-            avatar.innerHTML = `{avatar_html if LOGO_BASE64 else '🎓'}`;
+            avatar.innerHTML = `{AVATAR_HTML}`;
             msg.insertBefore(avatar, msg.firstChild);
         }}
     }});
@@ -389,40 +481,9 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ========== 折叠菜单（所有功能放这里）==========
-with st.expander("☰ 功能菜单"):
-    st.markdown("### 🔗 快捷链接")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"[🏫 学校官网]({SCHOOL_OFFICIAL_URL})")
-        st.markdown(f"[📚 教务系统]({COURSE_SYSTEM_URL})")
-        st.markdown(f"[🔥 百度热搜](https://top.baidu.com)")
-    with col2:
-        st.markdown(f"[📖 选课系统]({COURSE_SYSTEM_URL})")
-        st.markdown(f"[📊 成绩查询]({COURSE_SYSTEM_URL})")
-        st.markdown(f"[📢 通知公告]({SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm)")
-    
-    st.markdown("---")
-    st.markdown("### ⚙️ 设置")
-    
-    enable_thinking = st.checkbox("🧠 深度思考模式", value=False)
-    enable_search = st.checkbox("🌐 联网搜索", value=False)
-    
-    st.markdown("---")
-    if st.button("🗑️ 清空对话", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### 👥 开发团队")
-    st.markdown("- 尔主龙彪（组长）")
-    st.markdown("- 任乾鹏")
-    st.markdown("- 童妍")
-
-# ========== 快捷输入提示 ==========
-quick_list = ["📚 图书馆", "🍽️ 食堂", "📅 课表", "📊 成绩", "🔥 热点", "🏫 官网"]
-cols = st.columns(6)
+# ========== 快捷输入 ==========
+quick_list = ["📚 图书馆", "🍽️ 食堂", "📅 课表", "📊 成绩", "🔥 热点"]
+cols = st.columns(5)
 for idx, q in enumerate(quick_list):
     with cols[idx]:
         full_q = {
@@ -430,8 +491,7 @@ for idx, q in enumerate(quick_list):
             "🍽️ 食堂": "食堂有什么好吃的？",
             "📅 课表": "课表查询",
             "📊 成绩": "成绩查询",
-            "🔥 热点": "今日热点",
-            "🏫 官网": "学校官网"
+            "🔥 热点": "今日热点"
         }.get(q, q)
         if st.button(q, key=f"quick_{idx}", use_container_width=True):
             with st.chat_message("user"):
@@ -441,10 +501,26 @@ for idx, q in enumerate(quick_list):
                 with st.spinner("思考中..."):
                     persona = select_persona(full_q)
                     prefix = get_persona_prefix(persona)
-                    response = get_ai_response(full_q, persona, enable_thinking, enable_search)
+                    response = get_ai_response(full_q, persona, False, False)
                     st.markdown(prefix + response)
                     st.session_state.messages.append({"role": "assistant", "content": prefix + response})
             st.rerun()
+
+# ========== 高级设置（用 session_state 存储）==========
+if "enable_thinking" not in st.session_state:
+    st.session_state.enable_thinking = False
+if "enable_search" not in st.session_state:
+    st.session_state.enable_search = False
+
+# 隐藏的高级设置控件（通过菜单触发）
+with st.expander("", expanded=False):
+    st.markdown("### ⚙️ 设置")
+    st.session_state.enable_thinking = st.checkbox("🧠 深度思考模式", value=st.session_state.enable_thinking)
+    st.session_state.enable_search = st.checkbox("🌐 联网搜索", value=st.session_state.enable_search)
+    st.markdown("---")
+    if st.button("🗑️ 清空对话", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
 # ========== 主输入框 ==========
 user_input = st.chat_input("输入你的问题...")
@@ -457,7 +533,7 @@ if user_input:
         with st.spinner("思考中..."):
             persona = select_persona(user_input)
             prefix = get_persona_prefix(persona)
-            response = get_ai_response(user_input, persona, enable_thinking, enable_search)
+            response = get_ai_response(user_input, persona, st.session_state.enable_thinking, st.session_state.enable_search)
             full = prefix + response
             st.markdown(full)
             st.session_state.messages.append({"role": "assistant", "content": full})
