@@ -1,5 +1,5 @@
 """
-成工职小助手 - 移动端（借鉴电脑端折叠方案）
+成工职小助手 - 移动端（顶部设置栏版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -95,19 +95,16 @@ PERSONAS = {
     "longbiao": {
         "name": "尔主龙彪",
         "avatar": "👨‍💻",
-        "title": "AI应用工程师 · 组长",
         "greeting": "这个问题我来帮你分析一下..."
     },
     "qianpeng": {
         "name": "任乾鹏",
         "avatar": "📊",
-        "title": "数据测试工程师",
         "greeting": "据我整理的数据显示..."
     },
     "tongyan": {
         "name": "童妍",
         "avatar": "👩‍💻",
-        "title": "前端开发工程师",
         "greeting": "成工生活我超熟的！"
     }
 }
@@ -130,7 +127,7 @@ def get_system_prompt(persona_key):
 
 # ========== 本地知识库 ==========
 LOCAL_KNOWLEDGE = {
-    "图书馆": "📚 开放时间：周一至周五 8:00-22:00，周末 9:00-21:00\n📍 位置：图文信息中心1-4层",
+    "图书馆": "📚 开放时间：周一至周五 8:00-22:00，周末 9:00-21:00",
     "食堂": "🍽️ 早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n👍 推荐：二食堂牛肉面",
     "选课": "📅 预选第18周，正选开学前1周，补退选开学第1周",
     "宿舍": "🔧 报修：公众号「成工后勤」或联系楼栋管理员",
@@ -222,7 +219,33 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         return resp
     return f"抱歉，无法回答。试试问：图书馆几点开门？"
 
-# ========== CSS样式（移动端优化）==========
+# ========== 初始化会话状态 ==========
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.enable_thinking = False
+    st.session_state.enable_search = False
+    st.session_state.show_settings = False  # 控制设置面板显示
+    
+    welcome_msg = """👋 **你好！我是成工职小助手**
+
+---
+
+**👨‍💻 尔主龙彪学长** - AI、编程、选课
+
+**📊 任乾鹏学长** - 数据、成绩、表格
+
+**👩‍💻 童妍学姐** - 校园生活、社团
+
+---
+
+💡 **试试问我：**
+- 图书馆几点开门？
+- 帮我写个Python代码
+- 今日热点有哪些？"""
+    
+    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
+
+# ========== CSS样式 ==========
 st.markdown(f"""
 <style>
     /* 隐藏默认元素 */
@@ -235,7 +258,7 @@ st.markdown(f"""
         max-width: 100% !important;
     }}
     
-    /* 完全隐藏侧边栏 */
+    /* 隐藏侧边栏 */
     [data-testid="stSidebar"], [data-testid="stSidebarNav"] {{
         display: none !important;
     }}
@@ -281,6 +304,30 @@ st.markdown(f"""
         color: rgba(255,255,255,0.85);
         margin: 2px 0 0 0;
         font-size: 0.65rem;
+    }}
+    
+    /* 设置按钮 */
+    .settings-btn {{
+        background: rgba(255,255,255,0.2);
+        border: none;
+        border-radius: 30px;
+        padding: 6px 12px;
+        color: white;
+        font-size: 0.7rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }}
+    
+    /* 设置面板 */
+    .settings-panel {{
+        background: white;
+        border-radius: 16px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 1px solid #e8e8e8;
     }}
     
     /* 快捷按钮 */
@@ -355,41 +402,17 @@ st.markdown(f"""
         font-size: 0.75rem !important;
     }}
     
-    /* 折叠区域（关键修复） */
-    details {{
-        background: white;
-        border-radius: 16px;
-        margin-bottom: 12px;
-        border: 1px solid #e8e8e8;
-        overflow: hidden;
-    }}
-    summary {{
-        padding: 12px 16px;
-        font-weight: 500;
-        color: #1a4d8c;
-        cursor: pointer;
-        list-style: none;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: white;
-        user-select: none;
-    }}
-    summary::-webkit-details-marker {{display: none;}}
-    summary::before {{
-        content: "⚙️";
-        font-size: 1rem;
-    }}
-    details[open] summary {{
-        border-bottom: 1px solid #e8e8e8;
-    }}
-    details[open] summary::before {{
-        content: "⚙️";
-    }}
-    
-    /* 折叠内部区域 */
-    .settings-content {{
-        padding: 16px;
+    /* 链接按钮 */
+    .link-btn {{
+        display: inline-block;
+        background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
+        color: white;
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 25px;
+        font-size: 0.7rem;
+        text-align: center;
+        margin: 4px;
     }}
 </style>
 
@@ -401,7 +424,20 @@ st.markdown(f"""
         <h3>{SCHOOL_NAME}</h3>
         <p>{SCHOOL_MOTTO}</p>
     </div>
-    <div style="font-size: 20px;">🤖</div>
+    <button class="settings-btn" onclick="toggleSettings()">⚙️ 设置</button>
+</div>
+
+<div id="settingsPanel" class="settings-panel" style="display: none;">
+    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" class="link-btn" style="flex:1; background: #e8a020;">🏫 官网</a>
+        <a href="{COURSE_SYSTEM_URL}" target="_blank" class="link-btn" style="flex:1; background: #1a4d8c;">📚 教务系统</a>
+    </div>
+    <div style="margin-top: 8px;">
+        <button class="stButton" onclick="clearChat()" style="width:100%;">🗑️ 清空对话</button>
+    </div>
+    <div style="text-align: center; margin-top: 8px; font-size: 0.6rem; color: #999;">
+        📅 {datetime.now().strftime('%Y-%m-%d')}
+    </div>
 </div>
 
 <div class="quick-btns">
@@ -414,6 +450,25 @@ st.markdown(f"""
 </div>
 
 <script>
+function toggleSettings() {{
+    var panel = document.getElementById('settingsPanel');
+    if (panel.style.display === 'none') {{
+        panel.style.display = 'block';
+    }} else {{
+        panel.style.display = 'none';
+    }}
+}}
+
+function clearChat() {{
+    // 通过Streamlit的rerun机制清空对话
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.id = 'clear_chat';
+    input.value = 'true';
+    document.body.appendChild(input);
+    location.reload();
+}}
+
 function sendMsg(msg) {{
     const input = document.querySelector('.stChatInput textarea');
     if (input) {{
@@ -425,89 +480,53 @@ function sendMsg(msg) {{
         }}, 50);
     }}
 }}
+
+// 监听URL参数清空对话
+if (window.location.search.includes('clear=true')) {{
+    // 这里可以触发清空
+}}
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 初始化会话 ==========
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.enable_thinking = False
-    st.session_state.enable_search = False
-    
-    welcome_msg = """👋 **你好！我是成工职小助手**
+# ========== 显示设置切换按钮（Streamlit原生）==========
+# 在侧边栏位置放置一个简单的设置区域（使用columns布局）
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown("### 💬 对话")
+with col2:
+    if st.button("⚙️ 设置", use_container_width=True):
+        st.session_state.show_settings = not st.session_state.show_settings
 
----
-
-**👨‍💻 尔主龙彪学长** - AI、编程、选课
-> “这个问题我来帮你分析一下...”
-
-**📊 任乾鹏学长** - 数据、成绩、表格
-> “据我整理的数据显示...”
-
-**👩‍💻 童妍学姐** - 校园生活、社团
-> “成工生活我超熟的！”
-
----
-
-💡 **试试问我：**
-- 图书馆几点开门？
-- 帮我写个Python排序代码
-- 生成一张成绩表格
-- 今日热点有哪些？"""
-    
-    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
+# 显示设置面板
+if st.session_state.show_settings:
+    with st.container():
+        st.markdown("---")
+        
+        # 使用st.toggle（借鉴电脑端）
+        enable_thinking = st.toggle("🧠 深度思考模式", value=st.session_state.enable_thinking)
+        enable_search = st.toggle("🌐 联网搜索", value=st.session_state.enable_search)
+        
+        st.session_state.enable_thinking = enable_thinking
+        st.session_state.enable_search = enable_search
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"[🏫 学校官网]({SCHOOL_OFFICIAL_URL})")
+        with col2:
+            st.markdown(f"[📚 教务系统]({COURSE_SYSTEM_URL})")
+        
+        if st.button("🗑️ 清空对话", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.show_settings = False
+            st.rerun()
+        
+        st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
+        st.markdown("---")
 
 # ========== 显示历史消息 ==========
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-
-# ========== 设置区域（借鉴电脑端的st.toggle方案）==========
-with st.expander("⚙️ 设置与工具", expanded=False):
-    st.markdown("### 模式设置")
-    
-    # 借鉴电脑端的 st.toggle 方式
-    enable_thinking = st.toggle("🧠 深度思考模式", value=st.session_state.enable_thinking)
-    enable_search = st.toggle("🌐 联网搜索", value=st.session_state.enable_search)
-    
-    st.session_state.enable_thinking = enable_thinking
-    st.session_state.enable_search = enable_search
-    
-    st.divider()
-    
-    # 快捷链接（借鉴电脑端的HTML按钮）
-    st.markdown(f"""
-    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" style="
-            flex: 1;
-            background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
-            color: white;
-            text-decoration: none;
-            padding: 8px;
-            border-radius: 25px;
-            font-size: 0.75rem;
-            text-align: center;
-            font-weight: bold;
-        ">🏫 官网</a>
-        <a href="{COURSE_SYSTEM_URL}" target="_blank" style="
-            flex: 1;
-            background: linear-gradient(135deg, #1a4d8c 0%, #2d6a4f 100%);
-            color: white;
-            text-decoration: none;
-            padding: 8px;
-            border-radius: 25px;
-            font-size: 0.75rem;
-            text-align: center;
-            font-weight: bold;
-        ">📚 教务系统</a>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("🗑️ 清空对话", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-    
-    st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
 
 # ========== 输入处理 ==========
 user_input = st.chat_input("输入你的问题...")
