@@ -1,5 +1,5 @@
 """
-成工职小助手 - 手机端（带折叠按钮版）
+成工职小助手 - 手机端（原生折叠按钮版）
 成都工业职业技术学院
 """
 
@@ -188,10 +188,9 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         return resp
     return f"抱歉，我暂时无法回答这个问题。试试问我：图书馆几点开门？课表怎么查？"
 
-# ========== 初始化会话状态 ==========
+# ========== 初始化会话 ==========
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.show_settings = False  # 设置面板折叠状态
     st.session_state.enable_thinking = False
     st.session_state.enable_search = False
     
@@ -221,7 +220,7 @@ if "messages" not in st.session_state:
         "content": welcome_msg
     })
 
-# ========== 自定义CSS（带折叠按钮）==========
+# ========== 自定义CSS（移动端优化 + 悬浮折叠按钮）==========
 st.markdown(f"""
 <style>
     /* 隐藏默认元素 */
@@ -282,94 +281,27 @@ st.markdown(f"""
         font-size: 0.65rem;
     }}
     
-    /* 折叠按钮 */
-    .settings-toggle {{
-        background: rgba(255,255,255,0.2);
-        border: none;
-        border-radius: 30px;
-        padding: 8px 14px;
-        color: white;
-        font-size: 0.75rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-    }}
-    .settings-toggle:active {{
-        background: rgba(255,255,255,0.35);
-        transform: scale(0.96);
-    }}
-    
-    /* 设置面板 */
-    .settings-panel {{
-        background: white;
-        border-radius: 16px;
-        padding: 16px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        display: none;
-    }}
-    .settings-panel.show {{
-        display: block;
-        animation: slideDown 0.3s ease;
-    }}
-    @keyframes slideDown {{
-        from {{ opacity: 0; transform: translateY(-10px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-    .setting-row {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12px;
-        padding: 8px 0;
-        border-bottom: 1px solid #f0f0f0;
-    }}
-    .setting-label {{
-        font-size: 0.85rem;
-        color: #1a1a2e;
-    }}
-    .setting-switch {{
-        width: 44px;
-        height: 24px;
-        background: #ccc;
-        border-radius: 24px;
-        cursor: pointer;
-        position: relative;
-        transition: 0.2s;
-    }}
-    .setting-switch.active {{
-        background: #2d6a4f;
-    }}
-    .setting-switch::after {{
-        content: '';
-        width: 20px;
-        height: 20px;
-        background: white;
+    /* 悬浮折叠按钮 - 重要！ */
+    .floating-settings-btn {{
+        position: fixed;
+        bottom: 80px;
+        right: 16px;
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #1a4d8c, #2d6a4f);
         border-radius: 50%;
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        transition: 0.2s;
-    }}
-    .setting-switch.active::after {{
-        left: 22px;
-    }}
-    .clear-btn {{
-        background: #f0f2f5;
-        border: none;
-        border-radius: 30px;
-        padding: 10px;
-        width: 100%;
-        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         cursor: pointer;
-        font-size: 0.8rem;
-        color: #1a4d8c;
-        margin-top: 8px;
+        z-index: 1000;
+        font-size: 24px;
+        transition: all 0.2s;
+        border: 2px solid white;
     }}
-    .clear-btn:active {{
-        background: #e0e0e0;
+    .floating-settings-btn:active {{
+        transform: scale(0.92);
     }}
     
     /* 快捷按钮网格 */
@@ -442,6 +374,57 @@ st.markdown(f"""
         padding: 12px 18px !important;
         font-size: 0.85rem !important;
     }}
+    
+    /* 美化Streamlit原生expander */
+    details {{
+        background: white;
+        border-radius: 20px;
+        margin-bottom: 12px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        position: fixed;
+        bottom: 140px;
+        right: 16px;
+        left: auto;
+        width: auto;
+        min-width: 200px;
+        z-index: 999;
+    }}
+    details[open] {{
+        position: relative;
+        bottom: auto;
+        right: auto;
+        margin: 0 0 12px 0;
+        width: 100%;
+    }}
+    summary {{
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #1a4d8c;
+        cursor: pointer;
+        list-style: none;
+        background: white;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }}
+    summary::-webkit-details-marker {{display: none;}}
+    summary::before {{
+        content: "⚙️";
+        font-size: 1.2rem;
+    }}
+    details[open] summary {{
+        border-radius: 20px 20px 0 0;
+        border-bottom: 1px solid #eee;
+    }}
+    .stButton button {{
+        border-radius: 30px !important;
+        background: #f0f2f5 !important;
+        color: #1a4d8c !important;
+        border: none !important;
+        font-size: 0.75rem !important;
+    }}
 </style>
 
 <div class="mobile-header">
@@ -452,24 +435,7 @@ st.markdown(f"""
         <h3>{SCHOOL_NAME}</h3>
         <p>{SCHOOL_MOTTO}</p>
     </div>
-    <button class="settings-toggle" onclick="toggleSettings()">
-        ⚙️ 设置
-    </button>
-</div>
-
-<div id="settingsPanel" class="settings-panel">
-    <div class="setting-row">
-        <span class="setting-label">🧠 深度思考模式</span>
-        <div id="thinkingSwitch" class="setting-switch" onclick="toggleThinking()"></div>
-    </div>
-    <div class="setting-row">
-        <span class="setting-label">🌐 联网搜索</span>
-        <div id="searchSwitch" class="setting-switch" onclick="toggleSearch()"></div>
-    </div>
-    <button class="clear-btn" onclick="clearChat()">🗑️ 清空对话</button>
-    <div style="text-align: center; margin-top: 12px; font-size: 0.65rem; color: #999;">
-        📅 {datetime.now().strftime('%Y-%m-%d')}
-    </div>
+    <div style="font-size: 20px;">🎓</div>
 </div>
 
 <div class="quick-grid">
@@ -503,63 +469,6 @@ st.markdown(f"""
 </div>
 
 <script>
-// 获取状态
-let showSettings = false;
-let thinkingEnabled = false;
-let searchEnabled = false;
-
-function toggleSettings() {{
-    const panel = document.getElementById('settingsPanel');
-    showSettings = !showSettings;
-    if (showSettings) {{
-        panel.classList.add('show');
-    }} else {{
-        panel.classList.remove('show');
-    }}
-}}
-
-function toggleThinking() {{
-    thinkingEnabled = !thinkingEnabled;
-    const switchEl = document.getElementById('thinkingSwitch');
-    if (thinkingEnabled) {{
-        switchEl.classList.add('active');
-    }} else {{
-        switchEl.classList.remove('active');
-    }}
-    // 通过Streamlit传递状态
-    sendToStreamlit('thinking', thinkingEnabled);
-}}
-
-function toggleSearch() {{
-    searchEnabled = !searchEnabled;
-    const switchEl = document.getElementById('searchSwitch');
-    if (searchEnabled) {{
-        switchEl.classList.add('active');
-    }} else {{
-        switchEl.classList.remove('active');
-    }}
-    sendToStreamlit('search', searchEnabled);
-}}
-
-function clearChat() {{
-    sendToStreamlit('clear', true);
-    // 关闭面板
-    const panel = document.getElementById('settingsPanel');
-    panel.classList.remove('show');
-    showSettings = false;
-}}
-
-function sendToStreamlit(key, value) {{
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.id = 'streamlit_' + key;
-    input.value = value;
-    document.body.appendChild(input);
-    // 触发Streamlit的rerun
-    const event = new Event('input', {{ bubbles: true }});
-    input.dispatchEvent(event);
-}}
-
 function sendMsg(msg) {{
     const input = document.querySelector('.stChatInput textarea');
     if (input) {{
@@ -571,35 +480,42 @@ function sendMsg(msg) {{
         }}, 50);
     }}
 }}
-
-// 初始化开关状态
-document.addEventListener('DOMContentLoaded', function() {{
-    const thinkingSwitch = document.getElementById('thinkingSwitch');
-    const searchSwitch = document.getElementById('searchSwitch');
-    if ({str(st.session_state.enable_thinking).lower()}) thinkingSwitch.classList.add('active');
-    if ({str(st.session_state.enable_search).lower()}) searchSwitch.classList.add('active');
-}});
 </script>
 """, unsafe_allow_html=True)
-
-# ========== 处理JavaScript传来的状态 ==========
-# 通过query params接收状态（Streamlit方式）
-import streamlit as st
-
-# 获取URL参数中的状态
-query_params = st.query_params
-if "thinking" in query_params:
-    st.session_state.enable_thinking = query_params["thinking"] == "true"
-if "search" in query_params:
-    st.session_state.enable_search = query_params["search"] == "true"
-if "clear" in query_params:
-    st.session_state.messages = []
-    st.query_params.clear()
 
 # ========== 显示历史消息 ==========
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+# ========== 设置区域（使用原生expander但美化）==========
+# 在移动端，这个expander会显示为一个可点击的按钮
+with st.expander("⚙️ 设置与工具", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        enable_thinking = st.checkbox(
+            "🧠 深度思考", 
+            value=st.session_state.enable_thinking,
+            help="AI会展示思考过程"
+        )
+        st.session_state.enable_thinking = enable_thinking
+    with col2:
+        enable_search = st.checkbox(
+            "🌐 联网搜索", 
+            value=st.session_state.enable_search,
+            help="搜索最新信息"
+        )
+        st.session_state.enable_search = enable_search
+    
+    st.divider()
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        if st.button("🗑️ 清空对话", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+    with col4:
+        st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
 
 # ========== 输入处理 ==========
 user_input = st.chat_input("输入你的问题...")
