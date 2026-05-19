@@ -1,5 +1,5 @@
 """
-成工职小助手 - 手机端版（完整功能）
+成工职小助手 - 手机端优化版
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -61,14 +61,12 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
 
 # ========== AI智能热点获取功能（完整版） ==========
 def get_ai_hot_trending(user_query):
-    """让AI自己回答热点问题，基于训练数据"""
-    
     prompt = f"""用户问：{user_query}
 
 请根据你掌握的知识，回答当前网络热点话题。
 
 要求：
-1. 列出8-12个当前热门话题（涵盖科技、娱乐、社会、教育、校园等）
+1. 列出8-10个当前热门话题（涵盖科技、娱乐、社会、教育、校园等）
 2. 每个话题用一句话简单介绍
 3. 用🔥📈💡✨🎯等表情符号标记热度
 4. 分类展示：
@@ -84,7 +82,6 @@ def get_ai_hot_trending(user_query):
     return response if response else get_hot_search_fallback()
 
 def get_hot_search_fallback():
-    """备用方案"""
     return f"""🔥 **查看今日热点**
 
 💡 想了解最新热点，你可以：
@@ -231,22 +228,18 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
-    # ===== 热点查询（完整AI版）=====
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "最近什么火", "热搜榜", "今日热点", "trending"]):
         with st.spinner("AI正在整理热点..."):
             return get_ai_hot_trending(user_input)
     
-    # 教务系统链接查询
     if any(word in lower for word in ["课表", "课程表", "成绩", "绩点", "教务系统", "成绩查询"]):
         local_answer = get_local_answer(user_input)
         if local_answer:
             return local_answer
     
-    # 官网链接查询
     if any(word in lower for word in ["官网", "学校网址"]):
         return f"🌐 {SCHOOL_OFFICIAL_URL}"
     
-    # 官网新闻/通知提取
     if any(word in lower for word in ["新闻", "通知", "公告"]):
         try:
             news = fetch_news_from_website()
@@ -259,13 +252,11 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             pass
         return get_news_fallback_response()
     
-    # 代码生成
     if any(w in lower for w in ["python", "java", "代码", "编程"]):
         full_prompt = f"生成代码：{user_input}"
         response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
         return response if response else "代码生成暂时不可用"
     
-    # 普通问答
     else:
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
@@ -288,14 +279,16 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             local = get_local_answer(user_input)
             return local if local else f"抱歉，无法回答「{user_input}」。试试问：图书馆几点开门？"
 
-# ========== 手机端CSS ==========
+# ========== 手机端优化CSS ==========
 st.markdown("""
 <style>
+    /* 隐藏默认元素 */
     #MainMenu, header, footer {visibility: hidden;}
     .stApp {background: #f5f7fb;}
     
+    /* 主容器 */
     .main .block-container {
-        padding: 0.5rem 0.8rem 80px 0.8rem !important;
+        padding: 0.5rem 0.8rem 70px 0.8rem !important;
         max-width: 100% !important;
     }
     
@@ -304,52 +297,85 @@ st.markdown("""
         display: none !important;
     }
     
-    /* 标题区域 */
-    .school-header {
+    /* ========== 顶部标题区 ========== */
+    .app-header {
         text-align: center;
-        padding: 0.5rem 0;
-        margin-bottom: 0.5rem;
+        padding: 0.3rem 0 0.8rem 0;
+        margin-bottom: 0.3rem;
+        border-bottom: 1px solid #e8e8e8;
     }
     
-    .school-name {
-        font-size: 1.1rem;
-        font-weight: bold;
+    .app-title {
+        font-size: 1rem;
+        font-weight: 600;
         color: #1a4d8c;
-    }
-    
-    .school-motto {
-        font-size: 0.65rem;
-        color: #888;
-    }
-    
-    /* 快捷按钮 */
-    .quick-buttons {
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 1rem;
+        align-items: center;
         justify-content: center;
+        gap: 6px;
     }
     
-    .quick-btn {
+    .app-motto {
+        font-size: 0.6rem;
+        color: #aaa;
+        margin-top: 2px;
+    }
+    
+    /* ========== 快捷按钮区域（2行布局）========== */
+    .quick-section {
         background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 30px;
-        padding: 6px 14px;
-        font-size: 0.75rem;
-        cursor: pointer;
+        border-radius: 16px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     
-    .quick-btn:active {
+    .quick-title {
+        font-size: 0.7rem;
+        color: #888;
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+    
+    .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+    
+    .quick-item {
+        background: #f8f9fa;
+        border: none;
+        border-radius: 30px;
+        padding: 8px 0;
+        font-size: 0.7rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #333;
+    }
+    
+    .quick-item:active {
         background: #1a4d8c;
         color: white;
+        transform: scale(0.96);
     }
     
-    /* 消息气泡 */
+    /* ========== 消息气泡 ========== */
+    [data-testid="stChatMessage"] {
+        margin-bottom: 0.6rem;
+    }
+    
     [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
         padding: 10px 14px !important;
         font-size: 0.85rem !important;
-        max-width: 85% !important;
+        line-height: 1.45 !important;
+        max-width: 88% !important;
+    }
+    
+    [data-testid="stChatMessage"][data-testid="user"] {
+        display: flex;
+        justify-content: flex-end;
     }
     
     [data-testid="stChatMessage"][data-testid="user"] [data-testid="stMarkdown"] {
@@ -365,7 +391,7 @@ st.markdown("""
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     
-    /* 输入框 */
+    /* ========== 输入框 ========== */
     .stChatInput {
         position: fixed;
         bottom: 0;
@@ -373,18 +399,20 @@ st.markdown("""
         right: 0;
         background: white;
         padding: 10px 12px;
-        border-top: 1px solid #e0e0e0;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom));
+        border-top: 1px solid #e8e8e8;
         z-index: 100;
     }
     
     .stChatInput textarea {
         border-radius: 25px !important;
-        border: 1px solid #ddd !important;
+        border: 1px solid #e0e0e0 !important;
         padding: 10px 16px !important;
         font-size: 0.85rem !important;
+        background: #f8f9fa;
     }
     
-    /* 底部导航栏 */
+    /* ========== 底部导航栏 ========== */
     .bottom-nav {
         position: fixed;
         bottom: 0;
@@ -393,10 +421,11 @@ st.markdown("""
         background: white;
         display: flex;
         justify-content: space-around;
-        padding: 8px 12px;
-        padding-bottom: calc(8px + env(safe-area-inset-bottom));
-        border-top: 1px solid #e0e0e0;
+        padding: 6px 12px;
+        padding-bottom: calc(6px + env(safe-area-inset-bottom));
+        border-top: 1px solid #e8e8e8;
         z-index: 99;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
     }
     
     .nav-item {
@@ -404,37 +433,64 @@ st.markdown("""
         flex-direction: column;
         align-items: center;
         gap: 2px;
-        color: #888;
-        font-size: 0.65rem;
+        color: #999;
+        font-size: 0.6rem;
         flex: 1;
         text-align: center;
         background: none;
         border: none;
         cursor: pointer;
+        padding: 4px 0;
+        border-radius: 8px;
     }
     
     .nav-item:active {
+        background: #f0f0f0;
         color: #1a4d8c;
     }
     
     .nav-icon {
         font-size: 1.2rem;
     }
+    
+    /* ========== 高级设置 ========== */
+    .streamlit-expanderHeader {
+        font-size: 0.75rem;
+        background: white;
+        border-radius: 20px;
+    }
+    
+    /* ========== 代码块 ========== */
+    pre {
+        background: #1e1e2e;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 0.7rem;
+        overflow-x: auto;
+    }
 </style>
 
-<!-- 标题 -->
-<div class="school-header">
-    <div class="school-name">🎓 成都工业职业技术学院</div>
-    <div class="school-motto">立德树人 · 精工强技</div>
+<!-- 顶部标题 -->
+<div class="app-header">
+    <div class="app-title">
+        <span>🎓</span> 成工职小助手
+    </div>
+    <div class="app-motto">立德树人 · 精工强技</div>
 </div>
 
-<!-- 快捷按钮 -->
-<div class="quick-buttons">
-    <span class="quick-btn" onclick="sendMsg('图书馆几点开门？')">📚 图书馆</span>
-    <span class="quick-btn" onclick="sendMsg('食堂有什么好吃的？')">🍽️ 食堂</span>
-    <span class="quick-btn" onclick="sendMsg('课表查询')">📅 课表</span>
-    <span class="quick-btn" onclick="sendMsg('成绩查询')">📊 成绩</span>
-    <span class="quick-btn" onclick="sendMsg('今日热点')">🔥 热点</span>
+<!-- 快捷按钮区域 -->
+<div class="quick-section">
+    <div class="quick-title">⚡ 快捷提问</div>
+    <div class="quick-grid">
+        <div class="quick-item" onclick="sendMsg('图书馆几点开门？')">📚 图书馆</div>
+        <div class="quick-item" onclick="sendMsg('课表查询')">📅 课表</div>
+        <div class="quick-item" onclick="sendMsg('成绩查询')">📊 成绩</div>
+        <div class="quick-item" onclick="sendMsg('今日热点')">🔥 热点</div>
+        <div class="quick-item" onclick="sendMsg('食堂有什么好吃的？')">🍽️ 食堂</div>
+        <div class="quick-item" onclick="sendMsg('选课')">📖 选课</div>
+        <div class="quick-item" onclick="sendMsg('宿舍报修')">🔧 宿舍</div>
+        <div class="quick-item" onclick="sendMsg('奖学金')">🏆 奖学金</div>
+    </div>
 </div>
 
 <!-- 底部导航栏 -->
@@ -474,20 +530,18 @@ function sendMsg(msg) {
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 侧边栏（手机端隐藏，设置放在可折叠区域）==========
-
 # ========== 初始化会话 ==========
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({
         "role": "assistant",
-        "content": f"""你好呀！我是成工职小助手 👋
+        "content": f"""👋 你好！我是成工职小助手
 
-由三位学长学姐共同为你服务：
+由三位学长学姐为你服务：
 
-👨‍💻 **尔主龙彪学长** - AI、编程、选课
-📊 **任乾鹏学长** - 成绩、课表、数据分析
-👩‍💻 **童妍学姐** - 校园生活、社团
+👨‍💻 **尔主龙彪学长** - AI、编程
+📊 **任乾鹏学长** - 成绩、课表  
+👩‍💻 **童妍学姐** - 校园生活
 
 ---
 
