@@ -23,6 +23,7 @@ except ImportError:
 # ========== 配置 ==========
 DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
+BAIDU_HOT_API = "https://api.knowsafe.com/v1/api/hot/baidu"  # 百度热搜API
 
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -59,48 +60,83 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== AI智能热点获取功能（完整版） ==========
-def get_ai_hot_trending(user_query):
-    """让AI自己回答热点问题，基于训练数据"""
+# ========== 百度热搜功能 ==========
+@st.cache_data(ttl=300)  # 缓存5分钟，减少API调用
+def fetch_baidu_hot_search(limit=15):
+    """获取百度热搜榜数据"""
+    try:
+        url = BAIDU_HOT_API
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 1:
+                hot_list = data.get('data', [])
+                return hot_list[:limit]
+        return None
+    except Exception as e:
+        print(f"获取百度热搜失败: {e}")
+        return None
+
+def format_hot_search_response(hot_list):
+    """格式化热搜数据为显示文本"""
+    if not hot_list or len(hot_list) == 0:
+        return None
     
+    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    
+    response = f"""🔥 **百度热搜榜** 🔥
+
+📅 更新时间：{now}
+
+"""
+    for idx, item in enumerate(hot_list, 1):
+        keyword = item.get('keyword', '')
+        href = item.get('href', '')
+        hot_value = item.get('hot', '')
+        
+        # 热度标记：前3名🔥，4-10名📈，其余●
+        if idx <= 3:
+            icon = "🔥"
+        elif idx <= 10:
+            icon = "📈"
+        else:
+            icon = "●"
+        
+        # 热度值显示
+        hot_str = f" `{hot_value}`" if hot_value else ""
+        
+        if href:
+            response += f"{icon} **{idx}. [{keyword}]({href})**{hot_str}\n\n"
+        else:
+            response += f"{icon} **{idx}. {keyword}**{hot_str}\n\n"
+    
+    response += """
+---
+💡 **小提示**：
+- 点击标题可查看百度搜索详情
+- 数据来自百度热搜，每5分钟自动更新
+"""
+    return response
+
+def get_ai_hot_trending(user_query):
+    """备用方案：使用AI总结热点（当API失效时）"""
     prompt = f"""用户问：{user_query}
 
-请根据你掌握的知识，回答当前网络热点话题。
+由于暂时无法获取实时热搜数据，请友好地告知用户，并提供以下帮助：
+1. 建议用户稍后再试
+2. 提供百度热搜链接：https://top.baidu.com
+3. 如果用户想了解特定领域的热点（如科技、娱乐等），可以基于你的知识分享一些近期热点
 
-要求：
-1. 列出10-15个当前热门话题（涵盖科技、娱乐、社会、教育、校园等）
-2. 每个话题用一句话简单介绍
-3. 用🔥📈💡✨🎯等表情符号标记热度
-4. 分类展示：
-   🔥 热搜爆款（最热门的3-5个）
-   📈 持续热议（讨论度高的）
-   💡 新鲜话题（刚出现的）
-   🎯 校园相关（学生关心的）
-5. 最后提示用户可以去百度热搜官网查看实时详情
-
-注意：结合你的知识给出合理的热点推荐，越贴近学生生活越好。"""
+请用温暖亲切的语气回答。"""
     
     response = call_deepseek([{"role": "user", "content": prompt}], "tongyan", False, None)
-    return response if response else get_hot_search_fallback()
-
-def get_hot_search_fallback():
-    """备用方案"""
-    return f"""🔥 **查看今日热点**
-
-💡 想了解最新热点，你可以：
-
-### 🔗 [点击查看百度热搜榜](https://top.baidu.com)
-### 🔗 [点击查看微博热搜榜](https://s.weibo.com/top/summary)
-
----
-
-**或者直接问我具体话题**，比如：
-- "AI有什么新闻？"
-- "最近有什么好看的电影？"
-- "科技圈有什么大事？"
-- "教育领域有什么新政策？"
-
-我会根据我的知识为你解答！"""
+    return response if response else f"🔥 查看百度热搜：https://top.baidu.com"
 
 # ========== 官网新闻提取功能 ==========
 def fetch_news_from_website():
@@ -262,9 +298,15 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
-    # ===== 热点查询（完整AI版）=====
+    # ===== 热点查询（真实百度热搜API）=====
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "最近什么火", "热搜榜", "今日热点", "trending"]):
-        with st.spinner("AI正在为你整理热点话题..."):
+        with st.spinner("正在获取百度热搜..."):
+            hot_list = fetch_baidu_hot_search(15)
+            if hot_list:
+                formatted = format_hot_search_response(hot_list)
+                if formatted:
+                    return formatted
+            # API失效，使用AI备用
             return get_ai_hot_trending(user_input)
     
     # 教务系统链接查询
@@ -409,8 +451,28 @@ with st.sidebar:
     enable_search = st.toggle("🌐 联网搜索", value=False)
     
     st.markdown("---")
-    st.markdown("### 🔥 热点板块")
-    st.info("💡 问我「今日热点」即可获取AI整理的热点话题！")
+    
+    # ===== 侧边栏热搜板块 =====
+    st.markdown("### 🔥 热搜榜")
+    
+    # 获取热搜数据（使用缓存）
+    hot_data = fetch_baidu_hot_search(10)
+    if hot_data:
+        for idx, item in enumerate(hot_data[:8], 1):
+            keyword = item.get('keyword', '')[:25]
+            href = item.get('href', '')
+            
+            icon = "🔥" if idx <= 3 else "📌"
+            
+            if href:
+                st.markdown(f"{icon} {idx}. [{keyword}]({href})")
+            else:
+                st.markdown(f"{icon} {idx}. {keyword}")
+        
+        now = datetime.now().strftime("%H:%M")
+        st.caption(f"⏰ 更新 {now}")
+    else:
+        st.info("💡 问我「今日热点」试试~")
     
     st.markdown("---")
     
@@ -446,6 +508,22 @@ with st.sidebar:
     ">📚 教务系统</a>
     """, unsafe_allow_html=True)
     
+    st.markdown(f"""
+    <a href="https://top.baidu.com" target="_blank" style="
+        display: block;
+        width: 100%;
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+        color: white;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+    ">🔥 百度热搜官网</a>
+    """, unsafe_allow_html=True)
+    
     st.markdown("---")
     
     if st.button("🗑️ 清空对话", use_container_width=True):
@@ -479,7 +557,7 @@ if "messages" not in st.session_state:
 - 📅 **课表查询** → 教务系统链接
 - 📊 **成绩查询** → 查看考试成绩和绩点
 - 🏫 **学校官网** → 了解学校动态
-- 🔥 **今日热点** → AI智能整理热点话题
+- 🔥 **今日热点** → 百度热搜实时榜单
 
 **试试问我：**
 - "图书馆几点开门？"
@@ -488,7 +566,10 @@ if "messages" not in st.session_state:
 - "今天有什么热点？"
 - "用Python写一个计算器"
 
-💡 **新功能**：我可以记住最近30条对话，连续聊天更流畅！
+💡 **新功能**：
+- 侧边栏实时显示热搜榜
+- 问我「今日热点」获取完整榜单
+- 我可以记住最近30条对话
 
 有什么问题尽管问！😊"""
     })
