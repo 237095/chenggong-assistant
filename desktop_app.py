@@ -1,5 +1,5 @@
 """
-成工职小助手 - 电脑端（热搜增强版）
+成工职小助手 - 电脑端（优化版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -52,7 +52,6 @@ for f in logo_files:
         LOGO_PATH = f
         break
 
-# 加载校徽图片为base64
 LOGO_BASE64 = None
 if LOGO_PATH and os.path.exists(LOGO_PATH):
     try:
@@ -78,48 +77,32 @@ def fetch_baidu_hot_search(limit=15):
         response.encoding = 'utf-8'
         
         if response.status_code != 200:
-            print(f"请求失败，状态码: {response.status_code}")
             return None
         
         html_content = response.text
-        
-        # 从HTML注释中提取JSON数据
         json_match = re.search(r'<!--s-data:({.*?})-->', html_content, re.DOTALL)
         
         if json_match:
             json_str = json_match.group(1)
             data = json.loads(json_str)
-            
             cards = data.get('data', {}).get('cards', [])
             if cards:
                 hot_list = cards[0].get('content', [])
-                
                 result = []
                 for idx, item in enumerate(hot_list, 1):
                     if idx > limit:
                         break
-                    
                     keyword = item.get('query', '')
                     if not keyword:
                         continue
-                    
-                    # 获取热搜描述（如果有）
-                    desc = item.get('desc', '')
-                    
                     result.append({
                         'keyword': keyword,
                         'href': f"https://www.baidu.com/s?wd={keyword}",
                         'hot_score': item.get('hotScore', ''),
-                        'desc': desc,
                         'rank': idx
                     })
-                
-                if result:
-                    print(f"成功抓取 {len(result)} 条热搜数据")
-                    return result
-        
+                return result
         return None
-        
     except Exception as e:
         print(f"获取百度热搜失败: {e}")
         return None
@@ -140,7 +123,7 @@ def get_hot_detail_with_ai(keyword):
 🔍 热度原因：[原因说明]"""
         
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-chat",  # ✅ 已改为标准模型
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=300,
@@ -152,22 +135,20 @@ def get_hot_detail_with_ai(keyword):
         return None
 
 def format_hot_search_response_with_summary(hot_list, enable_ai_summary=True):
-    """格式化热搜数据，包含AI总结"""
+    """格式化热搜数据（带AI总结）"""
     if not hot_list or len(hot_list) == 0:
         return None
     
     now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    
     response = f"""🔥 **百度热搜榜** 🔥
 
 📅 更新时间：{now}
 
 """
-    for item in hot_list:
+    for item in hot_list[:10]:
         idx = item.get('rank', 0)
         keyword = item.get('keyword', '')
         
-        # 热度标记
         if idx <= 3:
             icon = "🔥"
         elif idx <= 10:
@@ -177,23 +158,14 @@ def format_hot_search_response_with_summary(hot_list, enable_ai_summary=True):
         
         response += f"{icon} **{idx}. {keyword}**\n"
         
-        # 获取AI总结（可选）
         if enable_ai_summary:
-            with st.spinner(f"正在分析 {keyword}..."):
-                summary = get_hot_detail_with_ai(keyword)
-                if summary:
-                    response += f"{summary}\n\n"
-                else:
-                    response += f"> 点击链接查看详情：[百度搜索](https://www.baidu.com/s?wd={keyword})\n\n"
+            summary = get_hot_detail_with_ai(keyword)
+            if summary:
+                response += f"{summary}\n\n"
+            else:
+                response += f"> [点击查看详情](https://www.baidu.com/s?wd={keyword})\n\n"
         else:
             response += f"> [点击查看详情](https://www.baidu.com/s?wd={keyword})\n\n"
-    
-    response += """
----
-💡 **小提示**：
-- 以上内容由AI自动生成，仅供参考
-- 数据实时从百度热搜抓取
-"""
     return response
 
 def format_hot_search_response_simple(hot_list):
@@ -202,13 +174,12 @@ def format_hot_search_response_simple(hot_list):
         return None
     
     now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    
     response = f"""🔥 **百度热搜榜** 🔥
 
 📅 更新时间：{now}
 
 """
-    for item in hot_list:
+    for item in hot_list[:15]:
         idx = item.get('rank', 0)
         keyword = item.get('keyword', '')
         href = item.get('href', '')
@@ -224,55 +195,34 @@ def format_hot_search_response_simple(hot_list):
             response += f"{icon} **{idx}. [{keyword}]({href})**\n\n"
         else:
             response += f"{icon} **{idx}. {keyword}**\n\n"
-    
-    response += """
----
-💡 **小提示**：
-- 点击标题可查看百度搜索
-- 数据实时从百度热搜抓取
-"""
     return response
 
 # ========== 官网新闻提取 ==========
 def fetch_news_from_website():
     """从学校官网提取最新新闻"""
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
+        headers = {'User-Agent': 'Mozilla/5.0'}
         url = f"{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm"
-        
         response = requests.get(url, headers=headers, timeout=5)
-        
         if response.status_code != 200:
             return None
-        
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        
         all_news = []
-        
         for link in soup.find_all('a', href=True):
             title = link.get_text(strip=True)
             href = link['href']
-            
             if (len(title) > 8 and len(title) < 100 and 
                 any(word in title for word in ['通知', '公告', '公示', '关于', '开展', '举办'])):
-                
                 if href.startswith('/'):
                     href = SCHOOL_OFFICIAL_URL + href
                 elif not href.startswith('http'):
                     href = SCHOOL_OFFICIAL_URL + '/' + href
-                
                 if not any(n['title'] == title for n in all_news):
                     all_news.append({'title': title, 'link': href})
-                    
             if len(all_news) >= 6:
                 break
-        
         return all_news[:6] if all_news else None
-        
     except Exception as e:
         print(f"新闻提取失败: {e}")
         return None
@@ -312,33 +262,46 @@ PERSONAS = {
 }
 
 def select_persona(question):
+    """根据问题选择人格"""
     q = question.lower()
     if any(word in q for word in ["python", "java", "html", "代码", "编程", "选课", "ai", "人工智能"]):
         return "longbiao"
     elif any(word in q for word in ["考试", "复习", "数据", "表格", "成绩", "绩点", "课表", "成绩查询"]):
         return "qianpeng"
-    elif any(word in q for word in ["食堂", "宿舍", "社团", "校园", "生活", "美食"]):
-        return "tongyan"
     else:
         return "tongyan"
 
-def get_persona_prefix(persona_key):
+def get_persona_prefix(persona_key, question=None):
+    """获取人格前缀，只有校园生活问题才显示口头禅"""
     persona = PERSONAS[persona_key]
-    return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n> *{persona['greeting']}*\n\n"
+    base_prefix = f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}"
+    
+    if question:
+        q = question.lower()
+        campus_keywords = ["食堂", "宿舍", "社团", "校园", "生活", "美食", "活动", "操场", "教学楼", "图书馆", "校医院", "奖学金"]
+        is_campus_question = any(word in q for word in campus_keywords)
+        
+        if is_campus_question and persona_key == "tongyan":
+            return f"{base_prefix}\n\n> *{persona['greeting']}*\n\n"
+    
+    return f"{base_prefix}\n\n"
 
 def get_system_prompt(persona_key):
+    """系统提示词"""
     persona = PERSONAS[persona_key]
     return f"""你是"{SCHOOL_NAME}的成工职小助手"，你是{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}。
 
 ## 你的人格特质
-- 说话温暖、亲切
+- 说话温暖、亲切、专业
 
 ## 回答要求
 1. 用温暖亲切的语气
 2. 重要信息用**加粗**标注
-3. 适当使用表情符号"""
+3. 适当使用表情符号
+4. 如果是关于学校的问题，要结合成都工业职业技术学院的实际情况回答
+5. 如果是专业推荐、就业等咨询类问题，要给出有建设性的建议"""
 
-# ========== 本地知识库 ==========
+# ========== 本地知识库（仅作为快速响应备用）==========
 LOCAL_KNOWLEDGE = {
     "图书馆": "📚 图书馆开放时间：周一至周五 8:00-22:00，周末 9:00-21:00\n📍 位置：图文信息中心1-4层\n💳 凭校园卡借阅，每人限借5本",
     "食堂": "🍽️ 食堂营业时间：早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n\n🍜 推荐：二食堂牛肉面、一食堂麻辣烫\n💳 支持校园卡/支付宝",
@@ -347,8 +310,6 @@ LOCAL_KNOWLEDGE = {
     "校园卡": "💳 充值方式：微信公众号、支付宝、食堂自助机\n🔒 挂失：自助机或公众号",
     "奖学金": "🏆 国家奖学金8000元，申请时间每年9月\n🏆 国家励志奖学金5000元\n🏆 校级奖学金1000-3000元",
     "校医院": "🏥 24小时值班\n📞 急诊电话：1200\n📍 位置：学校西门旁",
-    "官网": f"🌐 学校官网：{SCHOOL_OFFICIAL_URL}",
-    
     "课表": f"📅 **课表查询**\n\n🔗 {COURSE_SYSTEM_URL}",
     "成绩": f"📊 **成绩查询**\n\n🔗 {COURSE_SYSTEM_URL}",
     "绩点": f"📈 **绩点查询**\n\n🔗 {COURSE_SYSTEM_URL}",
@@ -356,6 +317,7 @@ LOCAL_KNOWLEDGE = {
 }
 
 def get_local_answer(question):
+    """快速本地匹配"""
     q = question.lower()
     for key, answer in LOCAL_KNOWLEDGE.items():
         if key in q:
@@ -364,6 +326,7 @@ def get_local_answer(question):
 
 # ========== 联网搜索 ==========
 def search_online(query, max_results=2):
+    """联网搜索"""
     if not SEARCH_AVAILABLE:
         return None
     try:
@@ -373,9 +336,12 @@ def search_online(query, max_results=2):
     except:
         return None
 
-# ========== AI 调用 ==========
+# ========== AI 调用（✅ 已改为标准模型）==========
 def call_deepseek(messages, persona_key, use_thinking=False, search_context=None):
-    full_messages = [{"role": "system", "content": get_system_prompt(persona_key)}]
+    """调用DeepSeek API - 使用deepseek-chat模型"""
+    system_prompt = get_system_prompt(persona_key)
+    
+    full_messages = [{"role": "system", "content": system_prompt}]
     
     if use_thinking:
         full_messages.append({"role": "user", "content": "请先展示你的💭思考过程，再给出最终答案。"})
@@ -387,7 +353,7 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
     
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-chat",  # ✅ 已改为标准价格模型（原deepseek-v4-pro价格贵3倍）
             messages=full_messages,
             temperature=0.8,
             max_tokens=2000,
@@ -400,12 +366,13 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
 
 # ========== 核心回复函数 ==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
+    """核心回复函数"""
     lower = user_input.lower()
     
     # 百度热点查询
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "热搜榜", "今日热点"]):
         with st.spinner("正在获取百度热搜..."):
-            hot_list = fetch_baidu_hot_search(10)  # 只取前10条，避免API调用过多
+            hot_list = fetch_baidu_hot_search(10)
             if hot_list:
                 if enable_hot_summary:
                     formatted = format_hot_search_response_with_summary(hot_list, enable_ai_summary=True)
@@ -474,9 +441,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
 # ========== CSS样式 ==========
 st.markdown("""
 <style>
-    .stApp {
-        background: #fafafc;
-    }
+    .stApp { background: #fafafc; }
     
     [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
         padding: 12px 18px;
@@ -540,11 +505,11 @@ with st.sidebar:
     st.markdown("### ⚙️ 模式设置")
     enable_thinking = st.toggle("🧠 深度思考模式", value=False, help="AI会展示思考过程")
     enable_search = st.toggle("🌐 联网搜索", value=False, help="搜索最新信息")
-    enable_hot_summary = st.toggle("📝 AI热点总结", value=True, help="AI自动总结每个热点内容（较慢但更详细）")
+    enable_hot_summary = st.toggle("📝 AI热点总结", value=True, help="AI自动总结每个热点内容")
     
     st.markdown("---")
     
-    # 热点板块
+    # 热搜板块
     st.markdown("### 🔥 热搜榜")
     show_hot_search = st.toggle("📊 显示百度热搜", value=True)
     
@@ -560,22 +525,13 @@ with st.sidebar:
                 idx = item.get('rank', 0)
                 keyword = item.get('keyword', '')[:25]
                 href = item.get('href', '')
-                
-                if idx <= 3:
-                    icon = "🔥"
-                else:
-                    icon = "📌"
-                
+                icon = "🔥" if idx <= 3 else "📌"
                 if href:
                     st.markdown(f"{icon} {idx}. [{keyword}]({href})")
                 else:
                     st.markdown(f"{icon} {idx}. {keyword}")
-            
             now = datetime.now().strftime("%H:%M")
             st.caption(f"⏰ 更新 {now}")
-            
-            if enable_hot_summary:
-                st.caption("💡 开启AI总结后，回复会更详细")
         else:
             st.info("暂无法获取热搜数据")
     
@@ -620,7 +576,6 @@ with st.sidebar:
     st.markdown("- 尔主龙彪（组长）")
     st.markdown("- 任乾鹏")
     st.markdown("- 童妍")
-    
     st.caption(f"© {SCHOOL_NAME}")
 
 # ========== 初始化会话 ==========
@@ -642,46 +597,63 @@ if "messages" not in st.session_state:
 - 📅 课表查询
 - 📊 成绩查询
 - 🏫 学校官网
-- 🔥 百度热搜（支持AI总结）
+- 🔥 百度热搜
 
 **试试问我：**
+- "有什么好的专业推荐？"
 - "图书馆几点开门？"
-- "课表查询"
-- "我的成绩"
+- "帮我写一个Python排序代码"
 - "今天有什么热点？"
 
 有什么问题尽管问！😊"""
     })
 
 # ========== 显示历史消息 ==========
-for msg in st.session_state.messages:
+# ✅ 限制显示最近的消息，避免页面过长
+MAX_DISPLAY_MESSAGES = 20
+display_messages = st.session_state.messages[-MAX_DISPLAY_MESSAGES:] if len(st.session_state.messages) > MAX_DISPLAY_MESSAGES else st.session_state.messages
+
+for msg in display_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # ========== 快捷问题 ==========
 quick_cols = st.columns(5)
-quick_list = ["📚 图书馆几点开门", "🍽️ 食堂推荐", "📅 课表查询", "📊 成绩查询", "🔥 今日热点"]
+quick_list = [
+    ("有什么好的专业推荐？", "📚 专业推荐"),
+    ("图书馆几点开门？", "📚 图书馆"),
+    ("课表怎么查？", "📅 课表查询"),
+    ("成绩怎么查？", "📊 成绩查询"),
+    ("今天有什么热点？", "🔥 今日热点")
+]
 
-for idx, q in enumerate(quick_list):
+for idx, (question, display) in enumerate(quick_list):
     with quick_cols[idx]:
-        if st.button(q, key=f"quick_{idx}", use_container_width=True):
+        if st.button(display, key=f"quick_{idx}", use_container_width=True):
             with st.chat_message("user"):
-                st.markdown(q)
-            st.session_state.messages.append({"role": "user", "content": q})
+                st.markdown(question)
+            st.session_state.messages.append({"role": "user", "content": question})
             
             with st.chat_message("assistant"):
                 with st.spinner("学长学姐正在思考..."):
-                    persona_key = select_persona(q)
-                    prefix = get_persona_prefix(persona_key)
-                    response = get_ai_response(q, persona_key, enable_thinking, enable_search, enable_hot_summary)
-                    full_response = prefix + response
+                    persona_key = select_persona(question)
+                    prefix = get_persona_prefix(persona_key, question)
+                    response = get_ai_response(question, persona_key, enable_thinking, enable_search, enable_hot_summary)
+                    
+                    # 热点查询不加人格前缀
+                    is_hot = any(word in question.lower() for word in ["热点", "热搜", "今日热点"])
+                    if is_hot:
+                        full_response = response
+                    else:
+                        full_response = prefix + response
+                    
                     st.markdown(full_response)
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
             st.rerun()
 
 # ========== 主输入框 ==========
 user_input = st.chat_input("输入你的问题...")
-if user_input:
+if user_input and user_input.strip():
     with st.chat_message("user"):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -689,9 +661,16 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("学长学姐正在思考..."):
             persona_key = select_persona(user_input)
-            prefix = get_persona_prefix(persona_key)
+            prefix = get_persona_prefix(persona_key, user_input)
             response = get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary)
-            full_response = prefix + response
+            
+            # 热点查询不加人格前缀
+            is_hot = any(word in user_input.lower() for word in ["热点", "热搜", "今日热点"])
+            if is_hot:
+                full_response = response
+            else:
+                full_response = prefix + response
+            
             st.markdown(full_response)
             st.session_state.messages.append({"role": "assistant", "content": full_response})
     
