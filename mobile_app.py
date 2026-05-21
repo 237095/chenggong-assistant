@@ -1,5 +1,5 @@
 """
-成工职小助手 - 移动端（顶部设置栏版）
+成工职小助手 - 手机端（优化版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -9,8 +9,11 @@ from openai import OpenAI
 from datetime import datetime
 import base64
 import requests
+import json
+import re
 from bs4 import BeautifulSoup
 
+# 尝试导入联网搜索
 try:
     from duckduckgo_search import DDGS
     SEARCH_AVAILABLE = True
@@ -56,56 +59,140 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== 百度热搜 ==========
-def fetch_baidu_hot_search(limit=10):
+# ========== 百度热搜获取功能 ==========
+def fetch_baidu_hot_search(limit=15):
+    """直接从百度热搜页面抓取数据"""
     try:
-        url = "https://api.knowsafe.com/v1/api/hot/baidu"
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        url = "https://top.baidu.com/board?tab=realtime"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://top.baidu.com/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        }
+        
         response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 1:
-                return data.get('data', [])[:limit]
+        response.encoding = 'utf-8'
+        
+        if response.status_code != 200:
+            return None
+        
+        html_content = response.text
+        json_match = re.search(r'<!--s-data:({.*?})-->', html_content, re.DOTALL)
+        
+        if json_match:
+            json_str = json_match.group(1)
+            data = json.loads(json_str)
+            cards = data.get('data', {}).get('cards', [])
+            if cards:
+                hot_list = cards[0].get('content', [])
+                result = []
+                for idx, item in enumerate(hot_list, 1):
+                    if idx > limit:
+                        break
+                    keyword = item.get('query', '')
+                    if not keyword:
+                        continue
+                    result.append({
+                        'keyword': keyword,
+                        'href': f"https://www.baidu.com/s?wd={keyword}",
+                        'hot_score': item.get('hotScore', ''),
+                        'rank': idx
+                    })
+                return result
         return None
-    except:
+    except Exception as e:
+        print(f"获取百度热搜失败: {e}")
         return None
 
-# ========== 官网新闻 ==========
+def format_hot_search_response_simple(hot_list):
+    """简化版热搜显示"""
+    if not hot_list or len(hot_list) == 0:
+        return None
+    
+    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    response = f"""🔥 **百度热搜榜** 🔥
+
+📅 更新时间：{now}
+
+"""
+    for item in hot_list[:10]:
+        idx = item.get('rank', 0)
+        keyword = item.get('keyword', '')
+        href = item.get('href', '')
+        
+        if idx <= 3:
+            icon = "🔥"
+        elif idx <= 10:
+            icon = "📈"
+        else:
+            icon = "●"
+        
+        if href:
+            response += f"{icon} **{idx}. [{keyword}]({href})**\n\n"
+        else:
+            response += f"{icon} **{idx}. {keyword}**\n\n"
+    return response
+
+# ========== 官网新闻提取 ==========
 def fetch_news_from_website():
+    """从学校官网提取最新新闻"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         url = f"{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm"
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code != 200:
             return None
+        response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        news = []
+        all_news = []
         for link in soup.find_all('a', href=True):
             title = link.get_text(strip=True)
-            if len(title) > 8 and any(w in title for w in ['通知', '公告']):
-                news.append(title)
-                if len(news) >= 5:
-                    break
-        return news
-    except:
+            href = link['href']
+            if (len(title) > 8 and len(title) < 100 and 
+                any(word in title for word in ['通知', '公告', '公示', '关于', '开展', '举办'])):
+                if href.startswith('/'):
+                    href = SCHOOL_OFFICIAL_URL + href
+                elif not href.startswith('http'):
+                    href = SCHOOL_OFFICIAL_URL + '/' + href
+                if not any(n['title'] == title for n in all_news):
+                    all_news.append({'title': title, 'link': href})
+            if len(all_news) >= 6:
+                break
+        return all_news[:6] if all_news else None
+    except Exception as e:
+        print(f"新闻提取失败: {e}")
         return None
 
-# ========== 人格设定 ==========
+def get_news_fallback_response():
+    return f"""📢 **查看学校最新通知和新闻**
+
+**🔗 通知公告**
+{SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm
+
+**🔗 学校官网首页**
+{SCHOOL_OFFICIAL_URL}
+
+**🔗 教务系统**
+{COURSE_SYSTEM_URL}"""
+
+# ========== 三位学长学姐的人格设定 ==========
 PERSONAS = {
     "longbiao": {
         "name": "尔主龙彪",
         "avatar": "👨‍💻",
-        "greeting": "这个问题我来帮你分析一下..."
+        "greeting": "这个问题我来帮你分析一下...",
     },
     "qianpeng": {
         "name": "任乾鹏",
         "avatar": "📊",
-        "greeting": "据我整理的数据显示..."
+        "greeting": "据我整理的数据显示...",
     },
     "tongyan": {
         "name": "童妍",
         "avatar": "👩‍💻",
-        "greeting": "成工生活我超熟的！"
+        "greeting": "成工生活我超熟的！",
     }
 }
 
@@ -117,17 +204,29 @@ def select_persona(question):
         return "qianpeng"
     return "tongyan"
 
-def get_persona_prefix(persona_key):
+def get_persona_prefix(persona_key, question=None):
+    """获取人格前缀，只有校园生活问题才显示口头禅"""
     persona = PERSONAS[persona_key]
-    return f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}\n\n*{persona['greeting']}*\n\n"
+    base_prefix = f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}"
+    
+    if question:
+        q = question.lower()
+        campus_keywords = ["食堂", "宿舍", "社团", "校园", "生活", "美食", "活动", "操场", "教学楼", "图书馆", "校医院", "奖学金"]
+        is_campus_question = any(word in q for word in campus_keywords)
+        
+        if is_campus_question and persona_key == "tongyan":
+            return f"{base_prefix}\n\n> *{persona['greeting']}*\n\n"
+    
+    return f"{base_prefix}\n\n"
 
 def get_system_prompt(persona_key):
+    """精简版系统提示词（节省token）"""
     persona = PERSONAS[persona_key]
-    return f"你是{SCHOOL_NAME}小助手{persona['name']}，说话温暖亲切。"
+    return f"你是成都工业职业技术学院的AI助手{persona['name']}。说话亲切温暖，帮助解答问题。"
 
 # ========== 本地知识库 ==========
 LOCAL_KNOWLEDGE = {
-    "图书馆": "📚 开放时间：周一至周五 8:00-22:00，周末 9:00-21:00",
+    "图书馆": "📚 开放时间：周一至周五 8:00-22:00，周末 9:00-21:00\n📍 位置：图文信息中心1-4层",
     "食堂": "🍽️ 早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n👍 推荐：二食堂牛肉面",
     "选课": "📅 预选第18周，正选开学前1周，补退选开学第1周",
     "宿舍": "🔧 报修：公众号「成工后勤」或联系楼栋管理员",
@@ -147,28 +246,43 @@ def get_local_answer(question):
             return ans
     return None
 
-# ========== AI调用 ==========
+# ========== 联网搜索 ==========
+def search_online(query, max_results=2):
+    if not SEARCH_AVAILABLE:
+        return None
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+            return [{"title": r['title'], "body": r['body'][:300]} for r in results]
+    except:
+        return None
+
+# ========== AI 调用（✅ 已改为标准模型）==========
 def call_deepseek(messages, persona_key, use_thinking, search_context):
-    full = [{"role": "system", "content": get_system_prompt(persona_key)}]
+    """调用DeepSeek API - 使用deepseek-chat模型"""
+    system_prompt = get_system_prompt(persona_key)
+    
+    full = [{"role": "system", "content": system_prompt}]
     
     if use_thinking:
         full.append({"role": "user", "content": "请先展示你的💭思考过程，再给出答案。"})
     
     if search_context:
-        full.append({"role": "user", "content": f"参考信息：{search_context}"})
+        full.append({"role": "user", "content": f"参考信息：\n{search_context}"})
     
-    full.extend(messages[-15:])
+    full.extend(messages[-10:])  # ✅ 限制历史消息为10轮（原15轮）
     
     try:
         r = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-chat",  # ✅ 已改为标准价格模型
             messages=full,
             temperature=0.8,
             max_tokens=1500,
             timeout=30
         )
         return r.choices[0].message.content
-    except:
+    except Exception as e:
+        print(f"API调用失败: {e}")
         return None
 
 # ========== 回复函数 ==========
@@ -179,12 +293,9 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     if any(w in lower for w in ["热点", "热搜", "今日热点"]):
         hot_list = fetch_baidu_hot_search(10)
         if hot_list:
-            response = "🔥 **今日热点**\n\n"
-            for idx, item in enumerate(hot_list[:8], 1):
-                keyword = item.get('keyword', '')[:30]
-                icon = "🔥" if idx <= 3 else "📈"
-                response += f"{icon} {idx}. {keyword}\n\n"
-            return response
+            formatted = format_hot_search_response_simple(hot_list)
+            if formatted:
+                return formatted
         return "暂时无法获取热搜数据"
     
     # 本地知识库
@@ -211,7 +322,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             pass
     
     # 调用AI
-    history = st.session_state.messages[-15:] if len(st.session_state.messages) > 15 else st.session_state.messages
+    history = st.session_state.messages[-10:] if len(st.session_state.messages) > 10 else st.session_state.messages
     msgs = [{"role": m["role"], "content": m["content"]} for m in history if m["role"] != "system"]
     resp = call_deepseek(msgs, persona_key, enable_thinking, search_ctx)
     
@@ -219,33 +330,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         return resp
     return f"抱歉，无法回答。试试问：图书馆几点开门？"
 
-# ========== 初始化会话状态 ==========
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.enable_thinking = False
-    st.session_state.enable_search = False
-    st.session_state.show_settings = False  # 控制设置面板显示
-    
-    welcome_msg = """👋 **你好！我是成工职小助手**
-
----
-
-**👨‍💻 尔主龙彪学长** - AI、编程、选课
-
-**📊 任乾鹏学长** - 数据、成绩、表格
-
-**👩‍💻 童妍学姐** - 校园生活、社团
-
----
-
-💡 **试试问我：**
-- 图书馆几点开门？
-- 帮我写个Python代码
-- 今日热点有哪些？"""
-    
-    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
-
-# ========== CSS样式 ==========
+# ========== CSS样式（移动端优化）==========
 st.markdown(f"""
 <style>
     /* 隐藏默认元素 */
@@ -315,19 +400,6 @@ st.markdown(f"""
         color: white;
         font-size: 0.7rem;
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }}
-    
-    /* 设置面板 */
-    .settings-panel {{
-        background: white;
-        border-radius: 16px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border: 1px solid #e8e8e8;
     }}
     
     /* 快捷按钮 */
@@ -401,19 +473,6 @@ st.markdown(f"""
         border: none !important;
         font-size: 0.75rem !important;
     }}
-    
-    /* 链接按钮 */
-    .link-btn {{
-        display: inline-block;
-        background: linear-gradient(135deg, #e8a020 0%, #d4891a 100%);
-        color: white;
-        text-decoration: none;
-        padding: 6px 12px;
-        border-radius: 25px;
-        font-size: 0.7rem;
-        text-align: center;
-        margin: 4px;
-    }}
 </style>
 
 <div class="mobile-header">
@@ -427,17 +486,8 @@ st.markdown(f"""
     <button class="settings-btn" onclick="toggleSettings()">⚙️ 设置</button>
 </div>
 
-<div id="settingsPanel" class="settings-panel" style="display: none;">
-    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
-        <a href="{SCHOOL_OFFICIAL_URL}" target="_blank" class="link-btn" style="flex:1; background: #e8a020;">🏫 官网</a>
-        <a href="{COURSE_SYSTEM_URL}" target="_blank" class="link-btn" style="flex:1; background: #1a4d8c;">📚 教务系统</a>
-    </div>
-    <div style="margin-top: 8px;">
-        <button class="stButton" onclick="clearChat()" style="width:100%;">🗑️ 清空对话</button>
-    </div>
-    <div style="text-align: center; margin-top: 8px; font-size: 0.6rem; color: #999;">
-        📅 {datetime.now().strftime('%Y-%m-%d')}
-    </div>
+<div id="settingsPanel" class="settings-panel" style="display: none; background: white; border-radius: 16px; padding: 12px; margin-bottom: 12px;">
+    <div id="settingsContent"></div>
 </div>
 
 <div class="quick-btns">
@@ -459,16 +509,6 @@ function toggleSettings() {{
     }}
 }}
 
-function clearChat() {{
-    // 通过Streamlit的rerun机制清空对话
-    var input = document.createElement('input');
-    input.type = 'hidden';
-    input.id = 'clear_chat';
-    input.value = 'true';
-    document.body.appendChild(input);
-    location.reload();
-}}
-
 function sendMsg(msg) {{
     const input = document.querySelector('.stChatInput textarea');
     if (input) {{
@@ -480,53 +520,62 @@ function sendMsg(msg) {{
         }}, 50);
     }}
 }}
-
-// 监听URL参数清空对话
-if (window.location.search.includes('clear=true')) {{
-    // 这里可以触发清空
-}}
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 显示设置切换按钮（Streamlit原生）==========
-# 在侧边栏位置放置一个简单的设置区域（使用columns布局）
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.markdown("### 💬 对话")
-with col2:
-    if st.button("⚙️ 设置", use_container_width=True):
-        st.session_state.show_settings = not st.session_state.show_settings
+# ========== 初始化会话 ==========
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.enable_thinking = False
+    st.session_state.enable_search = False
+    st.session_state.show_settings = False
+    
+    welcome_msg = """👋 **你好！我是成工职小助手**
 
-# 显示设置面板
-if st.session_state.show_settings:
-    with st.container():
-        st.markdown("---")
-        
-        # 使用st.toggle（借鉴电脑端）
-        enable_thinking = st.toggle("🧠 深度思考模式", value=st.session_state.enable_thinking)
-        enable_search = st.toggle("🌐 联网搜索", value=st.session_state.enable_search)
-        
-        st.session_state.enable_thinking = enable_thinking
-        st.session_state.enable_search = enable_search
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"[🏫 学校官网]({SCHOOL_OFFICIAL_URL})")
-        with col2:
-            st.markdown(f"[📚 教务系统]({COURSE_SYSTEM_URL})")
-        
-        if st.button("🗑️ 清空对话", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.show_settings = False
-            st.rerun()
-        
-        st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
-        st.markdown("---")
+---
 
-# ========== 显示历史消息 ==========
-for msg in st.session_state.messages:
+**👨‍💻 尔主龙彪学长** - AI、编程、选课
+
+**📊 任乾鹏学长** - 数据、成绩、表格
+
+**👩‍💻 童妍学姐** - 校园生活、社团
+
+---
+
+💡 **试试问我：**
+- 有什么好的专业推荐？
+- 图书馆几点开门？
+- 帮我写个Python代码
+- 今日热点有哪些？"""
+    
+    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
+
+# ========== 显示历史消息（限制显示数量）==========
+MAX_DISPLAY_MESSAGES = 15
+display_messages = st.session_state.messages[-MAX_DISPLAY_MESSAGES:] if len(st.session_state.messages) > MAX_DISPLAY_MESSAGES else st.session_state.messages
+
+for msg in display_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+# ========== 设置面板（使用Streamlit原生组件）==========
+with st.expander("⚙️ 设置", expanded=False):
+    enable_thinking = st.toggle("🧠 深度思考模式", value=st.session_state.enable_thinking)
+    enable_search = st.toggle("🌐 联网搜索", value=st.session_state.enable_search)
+    
+    st.session_state.enable_thinking = enable_thinking
+    st.session_state.enable_search = enable_search
+    
+    st.divider()
+    
+    st.markdown(f"[🏫 学校官网]({SCHOOL_OFFICIAL_URL})")
+    st.markdown(f"[📚 教务系统]({COURSE_SYSTEM_URL})")
+    
+    if st.button("🗑️ 清空对话", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
 
 # ========== 输入处理 ==========
 user_input = st.chat_input("输入你的问题...")
@@ -538,14 +587,21 @@ if user_input and user_input.strip():
     with st.chat_message("assistant"):
         with st.spinner("学长学姐正在思考..."):
             persona = select_persona(user_input)
-            prefix = get_persona_prefix(persona)
+            prefix = get_persona_prefix(persona, user_input)
             response = get_ai_response(
                 user_input, 
                 persona, 
                 st.session_state.enable_thinking, 
                 st.session_state.enable_search
             )
-            full_response = prefix + response
+            
+            # 热点查询不加人格前缀
+            is_hot = any(word in user_input.lower() for word in ["热点", "热搜", "今日热点"])
+            if is_hot:
+                full_response = response
+            else:
+                full_response = prefix + response
+            
             st.markdown(full_response)
             st.session_state.messages.append({"role": "assistant", "content": full_response})
     
