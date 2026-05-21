@@ -1,5 +1,5 @@
 """
-成工职小助手 - 电脑端
+成工职小助手 - 电脑端（热搜增强版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -61,11 +61,10 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== 百度热搜获取功能（方案二：直接从百度页面抓取）==========
+# ========== 百度热搜获取功能 ==========
 def fetch_baidu_hot_search(limit=15):
     """直接从百度热搜页面抓取数据"""
     try:
-        # 百度热搜页面URL
         url = "https://top.baidu.com/board?tab=realtime"
         
         headers = {
@@ -84,22 +83,18 @@ def fetch_baidu_hot_search(limit=15):
         
         html_content = response.text
         
-        # 从HTML注释中提取JSON数据（百度热搜数据藏在这里）
+        # 从HTML注释中提取JSON数据
         json_match = re.search(r'<!--s-data:({.*?})-->', html_content, re.DOTALL)
         
         if json_match:
             json_str = json_match.group(1)
             data = json.loads(json_str)
             
-            # 解析数据结构
             cards = data.get('data', {}).get('cards', [])
             if cards:
-                # 普通热搜列表
                 hot_list = cards[0].get('content', [])
                 
                 result = []
-                
-                # 添加普通热搜（带排名）
                 for idx, item in enumerate(hot_list, 1):
                     if idx > limit:
                         break
@@ -107,11 +102,15 @@ def fetch_baidu_hot_search(limit=15):
                     keyword = item.get('query', '')
                     if not keyword:
                         continue
-                        
+                    
+                    # 获取热搜描述（如果有）
+                    desc = item.get('desc', '')
+                    
                     result.append({
                         'keyword': keyword,
                         'href': f"https://www.baidu.com/s?wd={keyword}",
                         'hot_score': item.get('hotScore', ''),
+                        'desc': desc,
                         'rank': idx
                     })
                 
@@ -119,48 +118,86 @@ def fetch_baidu_hot_search(limit=15):
                     print(f"成功抓取 {len(result)} 条热搜数据")
                     return result
         
-        # 备用方案：使用BeautifulSoup解析
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-        hot_items = []
-        
-        # 查找热搜条目
-        for item in soup.find_all('div', class_=re.compile('category-wrap_iQLoo')):
-            try:
-                # 提取标题
-                title_elem = item.find('div', class_=re.compile('c-single-text-ellipsis'))
-                if not title_elem:
-                    continue
-                title = title_elem.get_text(strip=True)
-                if not title:
-                    continue
-                
-                # 提取热度
-                hot_elem = item.find('div', class_=re.compile('hot-index_1Bl1a'))
-                hot_score = hot_elem.get_text(strip=True) if hot_elem else ''
-                
-                hot_items.append({
-                    'keyword': title,
-                    'href': f"https://www.baidu.com/s?wd={title}",
-                    'hot_score': hot_score,
-                    'rank': len(hot_items) + 1
-                })
-                
-                if len(hot_items) >= limit:
-                    break
-                    
-            except Exception as e:
-                print(f"解析条目出错: {e}")
-                continue
-        
-        return hot_items if hot_items else None
+        return None
         
     except Exception as e:
         print(f"获取百度热搜失败: {e}")
         return None
 
-def format_hot_search_response(hot_list):
-    """格式化热搜数据"""
+def get_hot_detail_with_ai(keyword):
+    """使用AI获取热搜关键词的详细内容"""
+    try:
+        prompt = f"""请帮我总结一下关于「{keyword}」这个热搜事件的核心内容。
+
+要求：
+1. 用2-3句话简洁概括事件
+2. 说明为什么会成为热点
+3. 给出关键信息点
+
+格式：
+📌 **{keyword}**
+[事件概括]
+🔍 热度原因：[原因说明]"""
+        
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=300,
+            timeout=15
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"AI总结失败: {e}")
+        return None
+
+def format_hot_search_response_with_summary(hot_list, enable_ai_summary=True):
+    """格式化热搜数据，包含AI总结"""
+    if not hot_list or len(hot_list) == 0:
+        return None
+    
+    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    
+    response = f"""🔥 **百度热搜榜** 🔥
+
+📅 更新时间：{now}
+
+"""
+    for item in hot_list:
+        idx = item.get('rank', 0)
+        keyword = item.get('keyword', '')
+        
+        # 热度标记
+        if idx <= 3:
+            icon = "🔥"
+        elif idx <= 10:
+            icon = "📈"
+        else:
+            icon = "●"
+        
+        response += f"{icon} **{idx}. {keyword}**\n"
+        
+        # 获取AI总结（可选）
+        if enable_ai_summary:
+            with st.spinner(f"正在分析 {keyword}..."):
+                summary = get_hot_detail_with_ai(keyword)
+                if summary:
+                    response += f"{summary}\n\n"
+                else:
+                    response += f"> 点击链接查看详情：[百度搜索](https://www.baidu.com/s?wd={keyword})\n\n"
+        else:
+            response += f"> [点击查看详情](https://www.baidu.com/s?wd={keyword})\n\n"
+    
+    response += """
+---
+💡 **小提示**：
+- 以上内容由AI自动生成，仅供参考
+- 数据实时从百度热搜抓取
+"""
+    return response
+
+def format_hot_search_response_simple(hot_list):
+    """简化版热搜显示（仅标题+链接）"""
     if not hot_list or len(hot_list) == 0:
         return None
     
@@ -175,9 +212,7 @@ def format_hot_search_response(hot_list):
         idx = item.get('rank', 0)
         keyword = item.get('keyword', '')
         href = item.get('href', '')
-        hot_score = item.get('hot_score', '')
         
-        # 热度标记：前3名🔥，4-10名📈，其余●
         if idx <= 3:
             icon = "🔥"
         elif idx <= 10:
@@ -185,13 +220,10 @@ def format_hot_search_response(hot_list):
         else:
             icon = "●"
         
-        # 热度分数显示
-        hot_text = f" `{hot_score}`" if hot_score else ""
-        
         if href:
-            response += f"{icon} **{idx}. [{keyword}]({href})**{hot_text}\n\n"
+            response += f"{icon} **{idx}. [{keyword}]({href})**\n\n"
         else:
-            response += f"{icon} **{idx}. {keyword}**{hot_text}\n\n"
+            response += f"{icon} **{idx}. {keyword}**\n\n"
     
     response += """
 ---
@@ -367,15 +399,18 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
         return None
 
 # ========== 核心回复函数 ==========
-def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
+def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
     lower = user_input.lower()
     
     # 百度热点查询
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "热搜榜", "今日热点"]):
         with st.spinner("正在获取百度热搜..."):
-            hot_list = fetch_baidu_hot_search(15)
+            hot_list = fetch_baidu_hot_search(10)  # 只取前10条，避免API调用过多
             if hot_list:
-                formatted = format_hot_search_response(hot_list)
+                if enable_hot_summary:
+                    formatted = format_hot_search_response_with_summary(hot_list, enable_ai_summary=True)
+                else:
+                    formatted = format_hot_search_response_simple(hot_list)
                 if formatted:
                     return formatted
             return "😅 暂时无法获取热搜数据，请稍后再试～"
@@ -439,12 +474,10 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
 # ========== CSS样式 ==========
 st.markdown("""
 <style>
-    /* 基本样式 */
     .stApp {
         background: #fafafc;
     }
     
-    /* 消息气泡 */
     [data-testid="stChatMessage"] [data-testid="stMarkdown"] {
         padding: 12px 18px;
         border-radius: 20px;
@@ -465,13 +498,11 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     
-    /* 侧边栏样式 */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
         border-right: 1px solid #e6e6e6;
     }
     
-    /* 按钮样式 */
     .stButton button {
         border-radius: 25px !important;
         transition: all 0.2s ease;
@@ -481,20 +512,11 @@ st.markdown("""
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    
-    /* 快捷按钮行 */
-    .quick-buttons {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # ========== 侧边栏 ==========
 with st.sidebar:
-    # 校徽和标题
     if LOGO_BASE64:
         st.markdown(f"""
         <div style="text-align: center; margin-bottom: 20px;">
@@ -518,6 +540,7 @@ with st.sidebar:
     st.markdown("### ⚙️ 模式设置")
     enable_thinking = st.toggle("🧠 深度思考模式", value=False, help="AI会展示思考过程")
     enable_search = st.toggle("🌐 联网搜索", value=False, help="搜索最新信息")
+    enable_hot_summary = st.toggle("📝 AI热点总结", value=True, help="AI自动总结每个热点内容（较慢但更详细）")
     
     st.markdown("---")
     
@@ -550,6 +573,9 @@ with st.sidebar:
             
             now = datetime.now().strftime("%H:%M")
             st.caption(f"⏰ 更新 {now}")
+            
+            if enable_hot_summary:
+                st.caption("💡 开启AI总结后，回复会更详细")
         else:
             st.info("暂无法获取热搜数据")
     
@@ -616,7 +642,7 @@ if "messages" not in st.session_state:
 - 📅 课表查询
 - 📊 成绩查询
 - 🏫 学校官网
-- 🔥 百度热搜
+- 🔥 百度热搜（支持AI总结）
 
 **试试问我：**
 - "图书馆几点开门？"
@@ -647,7 +673,7 @@ for idx, q in enumerate(quick_list):
                 with st.spinner("学长学姐正在思考..."):
                     persona_key = select_persona(q)
                     prefix = get_persona_prefix(persona_key)
-                    response = get_ai_response(q, persona_key, enable_thinking, enable_search)
+                    response = get_ai_response(q, persona_key, enable_thinking, enable_search, enable_hot_summary)
                     full_response = prefix + response
                     st.markdown(full_response)
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
@@ -664,7 +690,7 @@ if user_input:
         with st.spinner("学长学姐正在思考..."):
             persona_key = select_persona(user_input)
             prefix = get_persona_prefix(persona_key)
-            response = get_ai_response(user_input, persona_key, enable_thinking, enable_search)
+            response = get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary)
             full_response = prefix + response
             st.markdown(full_response)
             st.session_state.messages.append({"role": "assistant", "content": full_response})
