@@ -1,5 +1,5 @@
 """
-成工职小助手 - 手机端（优化版）
+成工职小助手 - 手机端（界面优化版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -44,7 +44,7 @@ st.set_page_config(
 )
 
 # ========== 检查校徽 ==========
-logo_files = ["school_logo.png", "logo.png", "校徽.png"]
+logo_files = ["school_logo.png", "logo.png", "校徽.png", "school_logo.jpg", "logo.jpg"]
 LOGO_PATH = None
 for f in logo_files:
     if os.path.exists(f):
@@ -220,7 +220,7 @@ def get_persona_prefix(persona_key, question=None):
     return f"{base_prefix}\n\n"
 
 def get_system_prompt(persona_key):
-    """精简版系统提示词（节省token）"""
+    """精简版系统提示词"""
     persona = PERSONAS[persona_key]
     return f"你是成都工业职业技术学院的AI助手{persona['name']}。说话亲切温暖，帮助解答问题。"
 
@@ -257,9 +257,9 @@ def search_online(query, max_results=2):
     except:
         return None
 
-# ========== AI 调用（✅ 已改为标准模型）==========
+# ========== AI 调用 ==========
 def call_deepseek(messages, persona_key, use_thinking, search_context):
-    """调用DeepSeek API - 使用deepseek-chat模型"""
+    """调用DeepSeek API - 使用deepseek-v4-flash模型"""
     system_prompt = get_system_prompt(persona_key)
     
     full = [{"role": "system", "content": system_prompt}]
@@ -270,11 +270,11 @@ def call_deepseek(messages, persona_key, use_thinking, search_context):
     if search_context:
         full.append({"role": "user", "content": f"参考信息：\n{search_context}"})
     
-    full.extend(messages[-10:])  # ✅ 限制历史消息为10轮（原15轮）
+    full.extend(messages[-10:])  # 限制历史消息为10轮
     
     try:
         r = client.chat.completions.create(
-            model="deepseek-chat",  # ✅ 已改为标准价格模型
+            model="deepseek-v4-flash",  # 使用最新V4模型
             messages=full,
             temperature=0.8,
             max_tokens=1500,
@@ -330,7 +330,34 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         return resp
     return f"抱歉，无法回答。试试问：图书馆几点开门？"
 
-# ========== CSS样式（移动端优化）==========
+# ========== 初始化会话 ==========
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.enable_thinking = False
+    st.session_state.enable_search = False
+    st.session_state.show_settings = False
+    
+    welcome_msg = """👋 **你好！我是成工职小助手**
+
+---
+
+**👨‍💻 尔主龙彪学长** - AI、编程、选课
+
+**📊 任乾鹏学长** - 数据、成绩、表格
+
+**👩‍💻 童妍学姐** - 校园生活、社团
+
+---
+
+💡 **试试问我：**
+- 有什么好的专业推荐？
+- 图书馆几点开门？
+- 帮我写个Python代码
+- 今日热点有哪些？"""
+    
+    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
+
+# ========== 自定义CSS（移动端优化 - 带折叠按钮）==========
 st.markdown(f"""
 <style>
     /* 隐藏默认元素 */
@@ -339,7 +366,7 @@ st.markdown(f"""
     
     /* 主容器 */
     .main .block-container {{
-        padding: 0.5rem 0.8rem 70px 0.8rem !important;
+        padding: 0.3rem 0.8rem 70px 0.8rem !important;
         max-width: 100% !important;
     }}
     
@@ -348,15 +375,15 @@ st.markdown(f"""
         display: none !important;
     }}
     
-    /* 顶部栏 */
+    /* 顶部栏 - 校徽始终显示 */
     .mobile-header {{
         background: linear-gradient(135deg, #1a4d8c 0%, #2d6a4f 100%);
         border-radius: 20px;
-        padding: 12px 16px;
+        padding: 10px 16px;
         margin-bottom: 12px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }}
     .mobile-logo {{
@@ -391,38 +418,54 @@ st.markdown(f"""
         font-size: 0.65rem;
     }}
     
-    /* 设置按钮 */
-    .settings-btn {{
+    /* 折叠设置按钮 - 固定在顶部右侧 */
+    .settings-toggle-btn {{
         background: rgba(255,255,255,0.2);
         border: none;
         border-radius: 30px;
         padding: 6px 12px;
         color: white;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         cursor: pointer;
-    }}
-    
-    /* 快捷按钮 */
-    .quick-btns {{
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 12px;
-        justify-content: center;
-    }}
-    .quick-btn {{
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 30px;
-        padding: 6px 14px;
-        font-size: 0.7rem;
-        cursor: pointer;
+        align-items: center;
+        gap: 4px;
         transition: all 0.2s;
     }}
-    .quick-btn:active {{
+    .settings-toggle-btn:active {{
+        background: rgba(255,255,255,0.35);
+        transform: scale(0.96);
+    }}
+    
+    /* 快捷按钮网格 - 3x3布局 */
+    .quick-grid {{
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 16px;
+    }}
+    .quick-card {{
+        background: white;
+        border: none;
+        border-radius: 16px;
+        padding: 10px 4px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: #1a4d8c;
+    }}
+    .quick-card:active {{
+        transform: scale(0.96);
         background: #1a4d8c;
         color: white;
-        transform: scale(0.96);
+    }}
+    .quick-emoji {{
+        font-size: 1.2rem;
+        display: block;
+        margin-bottom: 4px;
     }}
     
     /* 消息气泡 */
@@ -446,7 +489,7 @@ st.markdown(f"""
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }}
     
-    /* 输入框 */
+    /* 输入框固定底部 */
     .stChatInput {{
         position: fixed;
         bottom: 0;
@@ -463,6 +506,33 @@ st.markdown(f"""
         border: 1px solid #ddd !important;
         padding: 10px 16px !important;
         font-size: 0.85rem !important;
+    }}
+    
+    /* Streamlit原生折叠按钮美化 */
+    details {{
+        background: white;
+        border-radius: 16px;
+        margin-bottom: 12px;
+        border: none;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }}
+    summary {{
+        padding: 12px 16px;
+        font-weight: 500;
+        color: #1a4d8c;
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }}
+    summary::-webkit-details-marker {{display: none;}}
+    summary::before {{
+        content: "⚙️";
+        font-size: 1rem;
+    }}
+    details[open] summary {{
+        border-bottom: 1px solid #eee;
     }}
     
     /* 按钮样式 */
@@ -483,32 +553,39 @@ st.markdown(f"""
         <h3>{SCHOOL_NAME}</h3>
         <p>{SCHOOL_MOTTO}</p>
     </div>
-    <button class="settings-btn" onclick="toggleSettings()">⚙️ 设置</button>
 </div>
 
-<div id="settingsPanel" class="settings-panel" style="display: none; background: white; border-radius: 16px; padding: 12px; margin-bottom: 12px;">
-    <div id="settingsContent"></div>
-</div>
-
-<div class="quick-btns">
-    <span class="quick-btn" onclick="sendMsg('图书馆几点开门？')">📚 图书馆</span>
-    <span class="quick-btn" onclick="sendMsg('食堂有什么好吃的？')">🍽️ 食堂</span>
-    <span class="quick-btn" onclick="sendMsg('课表查询')">📅 课表</span>
-    <span class="quick-btn" onclick="sendMsg('成绩查询')">📊 成绩</span>
-    <span class="quick-btn" onclick="sendMsg('今日热点')">🔥 热点</span>
-    <span class="quick-btn" onclick="sendMsg('奖学金')">🏆 奖学金</span>
+<div class="quick-grid">
+    <div class="quick-card" onclick="sendMsg('有什么好的专业推荐？')">
+        <span class="quick-emoji">📚</span>专业推荐
+    </div>
+    <div class="quick-card" onclick="sendMsg('图书馆几点开门？')">
+        <span class="quick-emoji">📚</span>图书馆
+    </div>
+    <div class="quick-card" onclick="sendMsg('食堂有什么好吃的？')">
+        <span class="quick-emoji">🍽️</span>食堂
+    </div>
+    <div class="quick-card" onclick="sendMsg('课表查询')">
+        <span class="quick-emoji">📅</span>课表
+    </div>
+    <div class="quick-card" onclick="sendMsg('成绩查询')">
+        <span class="quick-emoji">📊</span>成绩
+    </div>
+    <div class="quick-card" onclick="sendMsg('今日热点')">
+        <span class="quick-emoji">🔥</span>热点
+    </div>
+    <div class="quick-card" onclick="sendMsg('奖学金')">
+        <span class="quick-emoji">🏆</span>奖学金
+    </div>
+    <div class="quick-card" onclick="sendMsg('宿舍报修')">
+        <span class="quick-emoji">🔧</span>宿舍
+    </div>
+    <div class="quick-card" onclick="sendMsg('校医院')">
+        <span class="quick-emoji">🏥</span>校医院
+    </div>
 </div>
 
 <script>
-function toggleSettings() {{
-    var panel = document.getElementById('settingsPanel');
-    if (panel.style.display === 'none') {{
-        panel.style.display = 'block';
-    }} else {{
-        panel.style.display = 'none';
-    }}
-}}
-
 function sendMsg(msg) {{
     const input = document.querySelector('.stChatInput textarea');
     if (input) {{
@@ -523,33 +600,6 @@ function sendMsg(msg) {{
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 初始化会话 ==========
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.enable_thinking = False
-    st.session_state.enable_search = False
-    st.session_state.show_settings = False
-    
-    welcome_msg = """👋 **你好！我是成工职小助手**
-
----
-
-**👨‍💻 尔主龙彪学长** - AI、编程、选课
-
-**📊 任乾鹏学长** - 数据、成绩、表格
-
-**👩‍💻 童妍学姐** - 校园生活、社团
-
----
-
-💡 **试试问我：**
-- 有什么好的专业推荐？
-- 图书馆几点开门？
-- 帮我写个Python代码
-- 今日热点有哪些？"""
-    
-    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
-
 # ========== 显示历史消息（限制显示数量）==========
 MAX_DISPLAY_MESSAGES = 15
 display_messages = st.session_state.messages[-MAX_DISPLAY_MESSAGES:] if len(st.session_state.messages) > MAX_DISPLAY_MESSAGES else st.session_state.messages
@@ -558,18 +608,23 @@ for msg in display_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ========== 设置面板（使用Streamlit原生组件）==========
-with st.expander("⚙️ 设置", expanded=False):
-    enable_thinking = st.toggle("🧠 深度思考模式", value=st.session_state.enable_thinking)
-    enable_search = st.toggle("🌐 联网搜索", value=st.session_state.enable_search)
-    
-    st.session_state.enable_thinking = enable_thinking
-    st.session_state.enable_search = enable_search
+# ========== 折叠设置面板（使用Streamlit原生expander）==========
+with st.expander("⚙️ 设置与工具", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        enable_thinking = st.toggle("🧠 深度思考", value=st.session_state.enable_thinking)
+        st.session_state.enable_thinking = enable_thinking
+    with col2:
+        enable_search = st.toggle("🌐 联网搜索", value=st.session_state.enable_search)
+        st.session_state.enable_search = enable_search
     
     st.divider()
     
-    st.markdown(f"[🏫 学校官网]({SCHOOL_OFFICIAL_URL})")
-    st.markdown(f"[📚 教务系统]({COURSE_SYSTEM_URL})")
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown(f"[🏫 官网]({SCHOOL_OFFICIAL_URL})")
+    with col4:
+        st.markdown(f"[📚 教务系统]({COURSE_SYSTEM_URL})")
     
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
