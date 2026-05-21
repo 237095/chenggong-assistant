@@ -10,6 +10,7 @@ from datetime import datetime
 import base64
 import requests
 import json
+import re
 from bs4 import BeautifulSoup
 
 # 尝试导入联网搜索
@@ -60,24 +61,100 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== 百度热搜获取功能 ==========
+# ========== 百度热搜获取功能（方案二：直接从百度页面抓取）==========
 def fetch_baidu_hot_search(limit=15):
-    """获取百度热搜榜数据"""
+    """直接从百度热搜页面抓取数据"""
     try:
-        url = "https://api.knowsafe.com/v1/api/hot/baidu"
+        # 百度热搜页面URL
+        url = "https://top.baidu.com/board?tab=realtime"
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://top.baidu.com/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         }
         
         response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = 'utf-8'
         
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 1:
-                hot_list = data.get('data', [])
-                return hot_list[:limit]
-        return None
+        if response.status_code != 200:
+            print(f"请求失败，状态码: {response.status_code}")
+            return None
+        
+        html_content = response.text
+        
+        # 从HTML注释中提取JSON数据（百度热搜数据藏在这里）
+        json_match = re.search(r'<!--s-data:({.*?})-->', html_content, re.DOTALL)
+        
+        if json_match:
+            json_str = json_match.group(1)
+            data = json.loads(json_str)
+            
+            # 解析数据结构
+            cards = data.get('data', {}).get('cards', [])
+            if cards:
+                # 普通热搜列表
+                hot_list = cards[0].get('content', [])
+                
+                result = []
+                
+                # 添加普通热搜（带排名）
+                for idx, item in enumerate(hot_list, 1):
+                    if idx > limit:
+                        break
+                    
+                    keyword = item.get('query', '')
+                    if not keyword:
+                        continue
+                        
+                    result.append({
+                        'keyword': keyword,
+                        'href': f"https://www.baidu.com/s?wd={keyword}",
+                        'hot_score': item.get('hotScore', ''),
+                        'rank': idx
+                    })
+                
+                if result:
+                    print(f"成功抓取 {len(result)} 条热搜数据")
+                    return result
+        
+        # 备用方案：使用BeautifulSoup解析
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        hot_items = []
+        
+        # 查找热搜条目
+        for item in soup.find_all('div', class_=re.compile('category-wrap_iQLoo')):
+            try:
+                # 提取标题
+                title_elem = item.find('div', class_=re.compile('c-single-text-ellipsis'))
+                if not title_elem:
+                    continue
+                title = title_elem.get_text(strip=True)
+                if not title:
+                    continue
+                
+                # 提取热度
+                hot_elem = item.find('div', class_=re.compile('hot-index_1Bl1a'))
+                hot_score = hot_elem.get_text(strip=True) if hot_elem else ''
+                
+                hot_items.append({
+                    'keyword': title,
+                    'href': f"https://www.baidu.com/s?wd={title}",
+                    'hot_score': hot_score,
+                    'rank': len(hot_items) + 1
+                })
+                
+                if len(hot_items) >= limit:
+                    break
+                    
+            except Exception as e:
+                print(f"解析条目出错: {e}")
+                continue
+        
+        return hot_items if hot_items else None
+        
     except Exception as e:
         print(f"获取百度热搜失败: {e}")
         return None
@@ -94,10 +171,13 @@ def format_hot_search_response(hot_list):
 📅 更新时间：{now}
 
 """
-    for idx, item in enumerate(hot_list, 1):
+    for item in hot_list:
+        idx = item.get('rank', 0)
         keyword = item.get('keyword', '')
         href = item.get('href', '')
+        hot_score = item.get('hot_score', '')
         
+        # 热度标记：前3名🔥，4-10名📈，其余●
         if idx <= 3:
             icon = "🔥"
         elif idx <= 10:
@@ -105,16 +185,19 @@ def format_hot_search_response(hot_list):
         else:
             icon = "●"
         
+        # 热度分数显示
+        hot_text = f" `{hot_score}`" if hot_score else ""
+        
         if href:
-            response += f"{icon} **{idx}. [{keyword}]({href})**\n\n"
+            response += f"{icon} **{idx}. [{keyword}]({href})**{hot_text}\n\n"
         else:
-            response += f"{icon} **{idx}. {keyword}**\n\n"
+            response += f"{icon} **{idx}. {keyword}**{hot_text}\n\n"
     
     response += """
 ---
 💡 **小提示**：
-- 点击标题可查看详情
-- 数据来自百度热搜，实时更新
+- 点击标题可查看百度搜索
+- 数据实时从百度热搜抓取
 """
     return response
 
@@ -450,7 +533,8 @@ with st.sidebar:
         hot_data = get_cached_hot_search()
         if hot_data:
             st.markdown("---")
-            for idx, item in enumerate(hot_data[:8], 1):
+            for item in hot_data[:8]:
+                idx = item.get('rank', 0)
                 keyword = item.get('keyword', '')[:25]
                 href = item.get('href', '')
                 
