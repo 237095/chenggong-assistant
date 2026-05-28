@@ -1,12 +1,28 @@
 """
-成工职小助手 - 主入口（带登录 + 设备检测 + 文档加载）
+成工职小助手 - 主入口
 成都工业职业技术学院
 """
 
 import streamlit as st
 from user_agents import parse
 
-# 导入模块
+# ========== 首先初始化 Supabase 客户端 ==========
+from supabase import create_client
+
+# 强制从 Secrets 读取配置
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    supabase_client = None
+    st.error("请先在 Secrets 中配置 SUPABASE_URL 和 SUPABASE_KEY")
+
+# 将客户端存入 session_state
+st.session_state.supabase_client = supabase_client
+
+# ========== 导入其他模块 ==========
 import login
 import admin_panel
 import load_docs
@@ -48,7 +64,7 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：加载文档（仅首次） ==========
+    # 已登录：加载文档（仅首次）
     if not st.session_state.docs_loaded:
         with st.spinner("📚 正在加载学校文档到知识库，请稍候..."):
             try:
@@ -57,9 +73,7 @@ def main():
             except Exception as e:
                 st.error(f"文档加载失败: {e}")
     
-    # ========== 显示用户信息 ==========
-    
-    # 顶部栏
+    # 显示用户信息
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
     with col1:
         st.markdown("### 🎓 成工职小助手")
@@ -77,23 +91,18 @@ def main():
     
     st.markdown("---")
     
-    # ========== 根据角色显示不同界面 ==========
+    # 根据角色显示不同界面
     if st.session_state.user_role == "admin":
-        # 管理员：显示后台管理
         admin_panel.show_admin_panel()
     else:
-        # 学生：显示聊天界面
-        # 检测设备类型
         user_agent_string = st.context.headers.get('User-Agent', '')
         user_agent = parse(user_agent_string)
         
         try:
             if user_agent.is_mobile:
-                # 手机端
                 with open("mobile_app.py", "r", encoding="utf-8") as f:
                     exec(f.read(), globals())
             else:
-                # 电脑端
                 with open("desktop_app.py", "r", encoding="utf-8") as f:
                     exec(f.read(), globals())
         except FileNotFoundError as e:
