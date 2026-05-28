@@ -7,18 +7,6 @@ import streamlit as st
 from user_agents import parse
 from supabase import create_client
 
-# ========== 最先初始化 Supabase（从 Secrets 读取）==========
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]  # 使用 Service Role Key
-    supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    st.session_state.supabase = supabase_client
-    st.session_state.supabase_ok = True
-except Exception as e:
-    st.session_state.supabase = None
-    st.session_state.supabase_ok = False
-    st.error(f"Supabase 初始化失败: {e}")
-
 # ========== 初始化登录状态 ==========
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -34,6 +22,10 @@ if "login_error" not in st.session_state:
     st.session_state.login_error = None
 if "docs_synced" not in st.session_state:
     st.session_state.docs_synced = False
+if "supabase" not in st.session_state:
+    st.session_state.supabase = None
+if "supabase_ok" not in st.session_state:
+    st.session_state.supabase_ok = False
 
 # ========== 页面配置 ==========
 if not st.session_state.logged_in:
@@ -57,12 +49,23 @@ def main():
         login.show_login_page()
         return
     
+    # ========== 已登录：初始化 Supabase 客户端（只初始化一次）==========
+    if not st.session_state.supabase_ok:
+        try:
+            SUPABASE_URL = st.secrets["SUPABASE_URL"]
+            SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]
+            st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            st.session_state.supabase_ok = True
+        except Exception as e:
+            st.error(f"Supabase 初始化失败: {e}")
+            st.session_state.supabase = None
+            st.session_state.supabase_ok = False
+    
     # ========== 已登录：同步文档（使用 session_state 中的 supabase）==========
     if not st.session_state.docs_synced and st.session_state.supabase_ok:
         try:
             import load_docs
             with st.spinner("📚 正在同步学校文档..."):
-                # 传递 supabase 客户端
                 load_docs.load_documents(st.session_state.supabase)
                 st.session_state.docs_synced = True
         except Exception as e:
