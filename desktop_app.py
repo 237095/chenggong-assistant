@@ -413,6 +413,12 @@ def search_online(query, max_results=2):
 # ========== AI 调用 ==========
 def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, rag_context=None):
     """调用DeepSeek API - 支持RAG上下文"""
+    
+    # 调试：打印 rag_context
+    if rag_context:
+        st.write(f"📚 rag_context 长度: {len(rag_context)}")
+        st.write(f"📚 rag_context 前300字符: {rag_context[:300]}")
+    
     system_prompt = get_system_prompt(persona_key)
     
     full_messages = [{"role": "system", "content": system_prompt}]
@@ -424,9 +430,12 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
         full_messages.append({"role": "user", "content": f"🌐 联网搜索结果：\n{search_context}"})
     
     if rag_context:
-        full_messages.append({"role": "user", "content": f"📖 学校官方资料：\n{rag_context}"})
+        full_messages.append({"role": "user", "content": f"📖 以下是学校官方资料，请根据这些资料回答问题：\n\n{rag_context}"})
     
     full_messages.extend(messages)
+    
+    # 打印发送的消息数量
+    st.write(f"📤 发送给API的消息数量: {len(full_messages)}")
     
     try:
         response = client.chat.completions.create(
@@ -436,9 +445,10 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
             max_tokens=2000,
             timeout=60
         )
+        st.success("✅ API 调用成功")
         return response.choices[0].message.content
     except Exception as e:
-        print(f"API调用失败: {e}")
+        st.error(f"❌ API调用失败: {e}")
         return None
 
 # ========== 核心回复函数（支持RAG）==========
@@ -503,11 +513,8 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         
         if rag_context:
             st.success("✅ 找到相关文档！")
-            # 将 RAG 上下文直接拼接到用户消息中
-            enhanced_input = f"{user_input}\n\n{rag_context}\n\n请根据以上学校官方资料回答用户的问题。"
         else:
             st.warning("⚠️ 未找到相关文档")
-            enhanced_input = user_input
         
         # 2. 联网搜索（如果开启）
         search_ctx = None
@@ -516,14 +523,14 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
             if sr:
                 search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
         
-        # 3. 调用 AI
+        # 3. 调用 AI（rag_context 单独传递）
         st.write("🤖 正在调用 AI...")
         response = call_deepseek(
-            [{"role": "user", "content": enhanced_input}], 
+            [{"role": "user", "content": user_input}], 
             persona_key, 
             enable_thinking, 
             search_ctx,
-            None  # rag_context 已经拼接到消息中，不再单独传递
+            rag_context  # 单独传递
         )
         
         if response:
