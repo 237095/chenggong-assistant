@@ -474,7 +474,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     else:
         # 1. 从 Supabase 检索相关学校文档
         rag_context = search_school_documents(user_input, limit=3)
-        
+        print(f"RAG检索结果长度: {len(rag_context)}")  # 添加这行
         # 2. 联网搜索（如果开启）
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
