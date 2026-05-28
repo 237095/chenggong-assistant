@@ -4,10 +4,12 @@
 
 import streamlit as st
 from datetime import datetime
-from supabase_client import get_supabase
+
+def get_supabase():
+    """从 session_state 获取 Supabase 客户端"""
+    return st.session_state.get("supabase", None)
 
 def get_all_students():
-    """获取所有学生列表"""
     supabase = get_supabase()
     if not supabase:
         return []
@@ -20,7 +22,6 @@ def get_all_students():
         return []
 
 def get_student_by_id(student_id: str):
-    """根据学号获取学生信息"""
     supabase = get_supabase()
     if not supabase:
         return None
@@ -33,7 +34,6 @@ def get_student_by_id(student_id: str):
         return None
 
 def verify_student(student_id: str, password: str):
-    """验证学生登录"""
     supabase = get_supabase()
     if not supabase:
         return None
@@ -54,7 +54,6 @@ def verify_student(student_id: str, password: str):
         return None
 
 def add_student(student_id: str, name: str, password: str = "237095", phone: str = "", class_name: str = ""):
-    """添加学生"""
     supabase = get_supabase()
     if not supabase:
         return False, "数据库连接失败"
@@ -77,7 +76,6 @@ def add_student(student_id: str, name: str, password: str = "237095", phone: str
         return False, f"添加失败: {e}"
 
 def delete_student(student_id: str):
-    """删除学生"""
     supabase = get_supabase()
     if not supabase:
         return False, "数据库连接失败"
@@ -89,7 +87,6 @@ def delete_student(student_id: str):
         return False, f"删除失败: {e}"
 
 def update_student(student_id: str, name: str = None, password: str = None, phone: str = None, class_name: str = None):
-    """更新学生信息"""
     supabase = get_supabase()
     if not supabase:
         return False, "数据库连接失败"
@@ -116,11 +113,9 @@ def update_student(student_id: str, name: str = None, password: str = None, phon
         return False, f"更新失败: {e}"
 
 def reset_student_password(student_id: str):
-    """重置学生密码为默认值 237095"""
     return update_student(student_id, password="237095")
 
 def get_student_count():
-    """获取学生总数"""
     supabase = get_supabase()
     if not supabase:
         return 0
