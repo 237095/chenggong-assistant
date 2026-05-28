@@ -4,31 +4,7 @@
 
 import streamlit as st
 from datetime import datetime
-
-# 不在这里初始化，改为懒加载
-_supabase_client = None
-
-def get_supabase_client():
-    """懒加载 Supabase 客户端 - 只在函数被调用时才初始化"""
-    global _supabase_client
-    if _supabase_client is not None:
-        return _supabase_client
-    
-    try:
-        # 延迟到函数调用时读取 secrets
-        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-        
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            # 不在这里报错，返回 None，让调用方处理
-            return None
-        
-        from supabase import create_client
-        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        return _supabase_client
-    except Exception as e:
-        print(f"Supabase 连接失败: {e}")
-        return None
+from supabase_client import get_supabase_client
 
 def get_all_students():
     """获取所有学生列表"""
