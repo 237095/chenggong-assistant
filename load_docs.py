@@ -18,8 +18,8 @@ def init_supabase() -> Client:
     
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def read_markdown_files(docs_dir: str = "docs") -> list:
-    """读取 docs 文件夹中的所有 Markdown 文件"""
+def read_markdown_files(docs_dir: str = "DOCS") -> list:
+    """读取 DOCS 文件夹中的所有 Markdown 文件"""
     documents = []
     
     if not os.path.exists(docs_dir):
@@ -58,37 +58,22 @@ def read_markdown_files(docs_dir: str = "docs") -> list:
             category = '教学管理'
         elif '评优' in filename:
             category = '评优奖励'
-        elif '实习' in filename:
-            category = '实习管理'
-        elif '社团' in filename:
-            category = '社团管理'
-        elif '助学' in filename or '困难' in filename:
-            category = '助学帮困'
-        elif '国法' in filename or '法规' in filename:
-            category = '法律法规'
-        elif '水电' in filename:
-            category = '校园生活'
-        elif '热水' in filename:
-            category = '校园生活'
-        elif '洗衣' in filename:
-            category = '校园生活'
         else:
             category = '学校文档'
         
-        # 清理内容（移除图片引用和 base64 图片）
+        # 清理内容
         clean_content = re.sub(r'!\[.*?\]\(.*?\)', '', content)
         clean_content = re.sub(r'<img[^>]*>', '', clean_content)
-        clean_content = re.sub(r'data:image/[^;]+;base64,[^\s]+', '', clean_content)
         clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)
         
         documents.append({
             "title": title,
             "category": category,
-            "content": clean_content[:5000],  # 限制长度
+            "content": clean_content[:5000],
             "metadata": {"source": filename}
         })
         
-        st.write(f"✅ 已读取: {filename} -> {category}")
+        st.write(f"✅ 已读取: {filename}")
     
     return documents
 
@@ -101,7 +86,7 @@ def upload_to_supabase(documents: list):
     count = 0
     for doc in documents:
         try:
-            # 检查是否已存在（避免重复上传）
+            # 检查是否已存在
             existing = supabase.table("documents").select("id").eq("title", doc["title"]).execute()
             if existing.data:
                 st.write(f"⏭️ 跳过已存在: {doc['title']}")
@@ -121,7 +106,7 @@ def load_documents():
     
     documents = read_markdown_files()
     if not documents:
-        st.warning("未找到文档文件，请将 Markdown 文件放入 docs 文件夹")
+        st.warning("未找到文档文件，请将 Markdown 文件放入 DOCS 文件夹")
         return 0
     
     st.write(f"共找到 {len(documents)} 个文档")
