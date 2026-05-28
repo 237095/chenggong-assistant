@@ -6,28 +6,7 @@
 import streamlit as st
 from user_agents import parse
 
-# ========== 首先初始化 Supabase 客户端 ==========
-from supabase import create_client
-
-# 强制从 Secrets 读取配置
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-else:
-    supabase_client = None
-    st.error("请先在 Secrets 中配置 SUPABASE_URL 和 SUPABASE_KEY")
-
-# 将客户端存入 session_state
-st.session_state.supabase_client = supabase_client
-
-# ========== 导入其他模块 ==========
-import login
-import admin_panel
-import load_docs
-
-# ========== 初始化登录状态 ==========
+# ========== 初始化登录状态（不导入 student_manager）==========
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_role" not in st.session_state:
@@ -61,6 +40,8 @@ else:
 def main():
     # 未登录：显示登录页面
     if not st.session_state.logged_in:
+        # 延迟导入 login 模块
+        import login
         login.show_login_page()
         return
     
@@ -68,6 +49,7 @@ def main():
     if not st.session_state.docs_loaded:
         with st.spinner("📚 正在加载学校文档到知识库，请稍候..."):
             try:
+                import load_docs
                 load_docs.load_documents()
                 st.session_state.docs_loaded = True
             except Exception as e:
@@ -86,6 +68,7 @@ def main():
         st.markdown(f"👤 {st.session_state.user_name}")
     with col4:
         if st.button("🚪 退出登录", use_container_width=True):
+            import login
             login.logout()
             st.rerun()
     
@@ -93,6 +76,7 @@ def main():
     
     # 根据角色显示不同界面
     if st.session_state.user_role == "admin":
+        import admin_panel
         admin_panel.show_admin_panel()
     else:
         user_agent_string = st.context.headers.get('User-Agent', '')
