@@ -1,5 +1,5 @@
 """
-成工职小助手 - 主入口
+成工职小助手 - 主入口（带登录 + 设备检测 + 文档加载）
 成都工业职业技术学院
 """
 
@@ -9,6 +9,7 @@ from user_agents import parse
 # 导入模块
 import login
 import admin_panel
+import load_docs
 
 # ========== 初始化登录状态 ==========
 if "logged_in" not in st.session_state:
@@ -23,6 +24,8 @@ if "user_student_id" not in st.session_state:
     st.session_state.user_student_id = None
 if "login_error" not in st.session_state:
     st.session_state.login_error = None
+if "docs_loaded" not in st.session_state:
+    st.session_state.docs_loaded = False
 
 # ========== 页面配置 ==========
 if not st.session_state.logged_in:
@@ -45,7 +48,16 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：显示用户信息 ==========
+    # ========== 已登录：加载文档（仅首次） ==========
+    if not st.session_state.docs_loaded:
+        with st.spinner("📚 正在加载学校文档到知识库，请稍候..."):
+            try:
+                load_docs.load_documents()
+                st.session_state.docs_loaded = True
+            except Exception as e:
+                st.error(f"文档加载失败: {e}")
+    
+    # ========== 显示用户信息 ==========
     
     # 顶部栏
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
