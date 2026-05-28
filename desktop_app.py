@@ -2,7 +2,9 @@
 成工职小助手 - 电脑端（RAG增强版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
-st.write("🚀 desktop_app.py 已加载")
+st.set_page_config(page_title="测试", page_icon="🔍")
+st.write("🚀 版本: 2025-05-28-v2 - 包含RAG调试")
+st.write("🔍 如果看到这行文字，说明代码已更新")
 import streamlit as st
 import os
 from openai import OpenAI
