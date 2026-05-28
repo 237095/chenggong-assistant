@@ -15,6 +15,20 @@ import json
 import re
 from bs4 import BeautifulSoup
 
+# 临时硬编码测试 Supabase 连接
+import streamlit as st
+from supabase import create_client
+
+# 硬编码 URL 和 Key（测试用）
+TEST_SUPABASE_URL = "https://hphjwdmnhkdafomoavpn.supabase.co"
+TEST_SUPABASE_KEY = "sb_publishable_5vw4Li96TZbJ87h5WZO-uw_-2pzF-1U"
+
+try:
+    test_client = create_client(TEST_SUPABASE_URL, TEST_SUPABASE_KEY)
+    st.success("✅ Supabase 硬编码连接成功")
+except Exception as e:
+    st.error(f"❌ Supabase 硬编码连接失败: {e}")
+
 # 尝试导入联网搜索
 try:
     from duckduckgo_search import DDGS
