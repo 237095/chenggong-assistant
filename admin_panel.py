@@ -5,6 +5,7 @@
 import streamlit as st
 import pandas as pd
 import student_manager
+import load_docs
 
 def show_admin_panel():
     """显示管理员后台"""
@@ -12,17 +13,20 @@ def show_admin_panel():
     st.markdown("## 🔧 管理后台")
     
     # 统计卡片
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         student_count = student_manager.get_student_count()
         st.metric("👨‍🎓 学生总数", student_count)
     with col2:
         st.metric("👨‍💼 管理员", 1)
+    with col3:
+        doc_count = load_docs.get_document_count()
+        st.metric("📚 文档数量", doc_count)
     
     st.markdown("---")
     
     # 标签页
-    tab1, tab2 = st.tabs(["📋 学生管理", "➕ 添加学生"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 学生管理", "➕ 添加学生", "📜 操作日志", "📚 文档管理"])
     
     # ========== 学生管理 ==========
     with tab1:
@@ -128,3 +132,42 @@ def show_admin_panel():
                         st.rerun()
                     else:
                         st.error(msg)
+    
+    # ========== 操作日志 ==========
+    with tab3:
+        st.markdown("### 操作日志")
+        st.info("日志功能开发中...")
+    
+    # ========== 文档管理 ==========
+    with tab4:
+        st.markdown("### 📚 知识库文档管理")
+        
+        # 显示当前文档数量
+        doc_count = load_docs.get_document_count()
+        st.metric("📄 已加载文档数", doc_count)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 重新加载所有文档", use_container_width=True):
+                with st.spinner("正在重新加载..."):
+                    # 先清空
+                    load_docs.clear_all_documents()
+                    # 重新加载
+                    count = load_docs.load_documents(force_reload=True)
+                    st.success(f"已重新加载 {count} 个文档")
+                    st.rerun()
+        
+        with col2:
+            if st.button("🗑️ 清空所有文档", use_container_width=True):
+                success, msg = load_docs.clear_all_documents()
+                if success:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        
+        st.info("💡 提示：文档存储在 Supabase 中，重新加载会检查并上传新文档，已存在的文档会自动跳过。")
+
+def is_admin():
+    """检查当前用户是否为管理员"""
+    return st.session_state.get("user_role") == "admin"
