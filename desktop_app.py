@@ -2,9 +2,7 @@
 成工职小助手 - 电脑端（RAG增强版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
-st.set_page_config(page_title="测试", page_icon="🔍")
-st.write("🚀 版本: 2025-05-28-v2 - 包含RAG调试")
-st.write("🔍 如果看到这行文字，说明代码已更新")
+
 import streamlit as st
 import os
 from openai import OpenAI
@@ -14,20 +12,6 @@ import requests
 import json
 import re
 from bs4 import BeautifulSoup
-
-# 临时硬编码测试 Supabase 连接
-import streamlit as st
-from supabase import create_client
-
-# 硬编码 URL 和 Key（测试用）
-TEST_SUPABASE_URL = "https://hphjwdmnhkdafomoavpn.supabase.co"
-TEST_SUPABASE_KEY = "sb_publishable_5vw4Li96TZbJ87h5WZO-uw_-2pzF-1U"
-
-try:
-    test_client = create_client(TEST_SUPABASE_URL, TEST_SUPABASE_KEY)
-    st.success("✅ Supabase 硬编码连接成功")
-except Exception as e:
-    st.error(f"❌ Supabase 硬编码连接失败: {e}")
 
 # 尝试导入联网搜索
 try:
@@ -92,6 +76,8 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
 
 def init_supabase():
     """初始化 Supabase 客户端 - 硬编码（临时）"""
+    if not SUPABASE_AVAILABLE:
+        return None
     try:
         SUPABASE_URL = "https://hphjwdmnhkdafomoavpn.supabase.co"
         SUPABASE_KEY = "sb_publishable_5vw4Li96TZbJ87h5WZO-uw_-2pzF-1U"
@@ -99,6 +85,7 @@ def init_supabase():
     except Exception as e:
         st.error(f"Supabase 连接失败: {e}")
         return None
+
 def search_school_documents(query: str, limit: int = 5) -> str:
     """从 Supabase documents 表中搜索相关学校文档"""
     supabase = init_supabase()
@@ -109,7 +96,7 @@ def search_school_documents(query: str, limit: int = 5) -> str:
     try:
         st.write(f"🔍 正在检索: {query}")
         
-        # 先查看表中有多少文档
+        # 查看表中有多少文档
         count_resp = supabase.table("documents").select("id", count="exact").execute()
         st.write(f"📊 数据库中共有 {count_resp.count} 个文档")
         
@@ -130,7 +117,7 @@ def search_school_documents(query: str, limit: int = 5) -> str:
             for i, doc in enumerate(response.data, 1):
                 title = doc.get('title', '学校文档')
                 category = doc.get('category', '其他')
-                content = doc.get('content', '')[:500]
+                content = doc.get('content', '')[:800]
                 context += f"**【{i}】{title}** (来自：{category})\n"
                 context += f"{content}\n\n"
             return context
@@ -516,8 +503,11 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         
         if rag_context:
             st.success("✅ 找到相关文档！")
+            # 将 RAG 上下文直接拼接到用户消息中
+            enhanced_input = f"{user_input}\n\n{rag_context}\n\n请根据以上学校官方资料回答用户的问题。"
         else:
             st.warning("⚠️ 未找到相关文档")
+            enhanced_input = user_input
         
         # 2. 联网搜索（如果开启）
         search_ctx = None
@@ -526,14 +516,14 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
             if sr:
                 search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
         
-        # 3. 调用 AI（带 RAG 上下文）
+        # 3. 调用 AI
         st.write("🤖 正在调用 AI...")
         response = call_deepseek(
-            [{"role": "user", "content": user_input}], 
+            [{"role": "user", "content": enhanced_input}], 
             persona_key, 
             enable_thinking, 
             search_ctx,
-            rag_context
+            None  # rag_context 已经拼接到消息中，不再单独传递
         )
         
         if response:
