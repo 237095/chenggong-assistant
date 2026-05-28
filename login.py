@@ -4,9 +4,8 @@
 
 import streamlit as st
 from datetime import datetime
-import student_manager
 
-# 管理员配置（本地硬编码，安全可靠）
+# 管理员配置（本地硬编码）
 ADMIN = {
     "username": "admin",
     "password": "123456",
@@ -30,30 +29,26 @@ def show_login_page():
     if "login_error" not in st.session_state:
         st.session_state.login_error = None
     
-    # 登录页面CSS
+    # 登录页面CSS（保持不变）
     st.markdown("""
     <style>
         #MainMenu, header, footer {visibility: hidden; display: none;}
         .stApp {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);}
-        
         .main .block-container {
             padding: 2rem 1.5rem !important;
             max-width: 450px !important;
             margin: 0 auto !important;
         }
-        
         .login-card {
             background: white;
             border-radius: 24px;
             padding: 32px 24px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.15);
         }
-        
         .logo-area {
             text-align: center;
             margin-bottom: 24px;
         }
-        
         .logo-icon {
             font-size: 64px;
             background: linear-gradient(135deg, #1a4d8c, #2d6a4f);
@@ -65,7 +60,6 @@ def show_login_page():
             justify-content: center;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        
         .title {
             text-align: center;
             font-size: 1.5rem;
@@ -73,14 +67,12 @@ def show_login_page():
             color: #1a1a2e;
             margin-bottom: 8px;
         }
-        
         .subtitle {
             text-align: center;
             font-size: 0.8rem;
             color: #666;
             margin-bottom: 28px;
         }
-        
         .error-msg {
             background: #fee2e2;
             color: #dc2626;
@@ -90,7 +82,6 @@ def show_login_page():
             margin-bottom: 16px;
             text-align: center;
         }
-        
         .school-badge {
             text-align: center;
             margin-top: 24px;
@@ -99,7 +90,6 @@ def show_login_page():
             font-size: 0.7rem;
             color: #999;
         }
-        
         .stButton button {
             width: 100%;
             background: linear-gradient(135deg, #1a4d8c, #2d6a4f);
@@ -110,13 +100,11 @@ def show_login_page():
             font-weight: 600;
             font-size: 0.9rem;
         }
-        
         .stTextInput input {
             border-radius: 30px;
             border: 1px solid #ddd;
             padding: 10px 16px;
         }
-        
         .stRadio > div {
             display: flex;
             gap: 16px;
@@ -149,7 +137,7 @@ def show_login_page():
     if st.session_state.login_error:
         st.markdown(f'<div class="error-msg">⚠️ {st.session_state.login_error}</div>', unsafe_allow_html=True)
     
-    # ========== 学生登录（使用 Supabase）==========
+    # ========== 学生登录（延迟导入 student_manager）==========
     if login_tab == "👨‍🎓 学生登录":
         student_id = st.text_input("📚 学号", placeholder="请输入学号（如：2024001）", key="student_id_input")
         student_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码（默认：237095）", key="student_password")
@@ -158,6 +146,8 @@ def show_login_page():
             if not student_id or not student_password:
                 st.session_state.login_error = "请填写学号和密码"
             else:
+                # 延迟导入，确保 st.secrets 已经加载
+                import student_manager
                 user = student_manager.verify_student(student_id, student_password)
                 if user:
                     st.session_state.logged_in = True
@@ -170,7 +160,7 @@ def show_login_page():
                 else:
                     st.session_state.login_error = "学号或密码错误"
     
-    # ========== 管理员登录（使用本地验证）==========
+    # ========== 管理员登录（本地验证）==========
     else:
         admin_username = st.text_input("👤 用户名", placeholder="请输入用户名", key="admin_user")
         admin_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码", key="admin_pass")
