@@ -22,7 +22,7 @@ def show_admin_panel():
     st.markdown("---")
     
     # 标签页
-    tab1, tab2, tab3 = st.tabs(["📋 学生管理", "➕ 添加学生", "📜 操作日志"])
+    tab1, tab2 = st.tabs(["📋 学生管理", "➕ 添加学生"])
     
     # ========== 学生管理 ==========
     with tab1:
