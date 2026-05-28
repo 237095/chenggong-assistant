@@ -28,11 +28,12 @@ except ImportError:
     SUPABASE_AVAILABLE = False
 
 # ========== 配置 ==========
+# 从 Secrets 读取 API Key
 DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
 if not DEEPSEEK_API_KEY:
-    st.error("请先在 Secrets 中配置 DEEPSEEK_API_KEY")
+    st.error("❌ 配置错误：请在 Streamlit Secrets 中配置 DEEPSEEK_API_KEY")
     st.stop()
 
 client = OpenAI(
@@ -90,17 +91,25 @@ def search_school_documents(query: str, limit: int = 5) -> str:
     """从 Supabase documents 表中搜索相关学校文档"""
     supabase = init_supabase()
     if not supabase:
+        st.warning("⚠️ Supabase 连接失败")
         return ""
     
     try:
-        # 使用全文搜索
+        st.write(f"🔍 正在检索: {query}")
+        
+        # 使用 ilike 模糊匹配
         response = supabase.table("documents")\
             .select("title, category, content")\
-            .text_search("content", query)\
+            .ilike("content", f"%{query}%")\
             .limit(limit)\
             .execute()
         
+        st.write(f"📊 检索到 {len(response.data) if response.data else 0} 条相关文档")
+        
         if response.data and len(response.data) > 0:
+            for doc in response.data:
+                st.write(f"   - 找到: {doc.get('title', '未知标题')}")
+            
             context = "\n\n📚 **学校官方资料参考**：\n\n"
             for i, doc in enumerate(response.data, 1):
                 title = doc.get('title', '学校文档')
@@ -109,9 +118,11 @@ def search_school_documents(query: str, limit: int = 5) -> str:
                 context += f"**【{i}】{title}** (来自：{category})\n"
                 context += f"{content}\n\n"
             return context
+        else:
+            st.warning("⚠️ 未找到相关文档")
         return ""
     except Exception as e:
-        print(f"文档搜索失败: {e}")
+        st.error(f"文档搜索失败: {e}")
         return ""
 
 # ========== 百度热搜获取功能 ==========
@@ -390,9 +401,9 @@ def search_online(query, max_results=2):
     except:
         return None
 
-# ========== AI 调用（✅ 已改为标准模型）==========
+# ========== AI 调用 ==========
 def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, rag_context=None):
-    """调用DeepSeek API - 使用deepseek-chat模型，支持RAG上下文"""
+    """调用DeepSeek API - 支持RAG上下文"""
     system_prompt = get_system_prompt(persona_key)
     
     full_messages = [{"role": "system", "content": system_prompt}]
@@ -414,7 +425,7 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
             messages=full_messages,
             temperature=0.8,
             max_tokens=2000,
-            timeout=30
+            timeout=60
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -426,7 +437,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     """核心回复函数 - 支持RAG检索增强"""
     lower = user_input.lower()
     
-    # 百度热点查询（不使用RAG）
+    # 百度热点查询
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "热搜榜", "今日热点"]):
         with st.spinner("正在获取百度热搜..."):
             hot_list = fetch_baidu_hot_search(10)
@@ -477,8 +488,15 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     # ========== 普通问答：使用 RAG 检索增强 ==========
     else:
         # 1. 从 Supabase 检索相关学校文档
+        st.write("🔍 正在检索学校文档...")
         rag_context = search_school_documents(user_input, limit=3)
-        print(f"RAG检索结果长度: {len(rag_context)}")  # 添加这行
+        st.write(f"📚 检索结果长度: {len(rag_context)}")
+        
+        if rag_context:
+            st.success("✅ 找到相关文档！")
+        else:
+            st.warning("⚠️ 未找到相关文档")
+        
         # 2. 联网搜索（如果开启）
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
@@ -487,6 +505,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
                 search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
         
         # 3. 调用 AI（带 RAG 上下文）
+        st.write("🤖 正在调用 AI...")
         response = call_deepseek(
             [{"role": "user", "content": user_input}], 
             persona_key, 
@@ -496,13 +515,16 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         )
         
         if response:
+            st.success("✅ AI 返回成功")
             return response
         else:
             # 4. 备用：本地知识库
             local = get_local_answer(user_input)
             if local:
+                st.info("📖 使用本地知识库")
                 return local
             # 5. 最终兜底
+            st.warning("⚠️ 使用兜底回复")
             return f"关于「{user_input}」，我正在学习中。\n\n💡 **你可以尝试：**\n- 换个方式描述问题\n- 询问校园相关问题（图书馆、食堂、课表等）\n- 问我「今天有什么热点」\n- 让我帮你写代码或生成表格"
 
 # ========== CSS样式 ==========
