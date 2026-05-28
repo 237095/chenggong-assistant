@@ -6,9 +6,97 @@
 import streamlit as st
 import hashlib
 from datetime import datetime
-# 在 login.py 顶部添加导入
+from openai import OpenAI
+
+# 导入 RAG 检索模块
 import rag_search
 
+# ========== 配置（从 Secrets 读取 API Key）==========
+DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
+
+if not DEEPSEEK_API_KEY:
+    st.error("❌ 配置错误：请在 Streamlit Secrets 中配置 DEEPSEEK_API_KEY")
+    st.stop()
+
+# 创建 OpenAI 客户端
+client = OpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url=DEEPSEEK_BASE_URL
+)
+
+# ========== 人格设定 ==========
+PERSONAS = {
+    "longbiao": {
+        "name": "尔主龙彪",
+        "avatar": "👨‍💻",
+        "greeting": "这个问题我来帮你分析一下...",
+    },
+    "qianpeng": {
+        "name": "任乾鹏",
+        "avatar": "📊",
+        "greeting": "据我整理的数据显示...",
+    },
+    "tongyan": {
+        "name": "童妍",
+        "avatar": "👩‍💻",
+        "greeting": "成工生活我超熟的！",
+    }
+}
+
+def get_system_prompt(persona_key):
+    """精简版系统提示词"""
+    persona = PERSONAS[persona_key]
+    return f"你是成都工业职业技术学院的AI助手{persona['name']}。说话亲切温暖，帮助解答问题。"
+
+# ========== 导入学生数据 ==========
+try:
+    from students_id import STUDENTS
+except ImportError:
+    # 如果文件不存在，创建默认数据
+    STUDENTS = {
+        "2024001": {"name": "张三", "password": "237095", "student_id": "2024001"},
+        "2024002": {"name": "李四", "password": "237095", "student_id": "2024002"},
+        "2024003": {"name": "王五", "password": "237095", "student_id": "2024003"},
+        "2024004": {"name": "赵六", "password": "237095", "student_id": "2024004"},
+        "2024005": {"name": "小明", "password": "237095", "student_id": "2024005"},
+    }
+
+# 管理员配置
+ADMIN = {
+    "username": "admin",
+    "password": "123456",
+    "name": "系统管理员"
+}
+
+def hash_password(password):
+    """密码加密"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_student(student_id, password):
+    """验证学生登录"""
+    if student_id in STUDENTS:
+        student = STUDENTS[student_id]
+        if student.get("password") == password:
+            return {
+                "role": "student",
+                "name": student["name"],
+                "user_id": student_id,
+                "student_id": student_id
+            }
+    return None
+
+def verify_admin(username, password):
+    """验证管理员登录"""
+    if username == ADMIN["username"] and password == ADMIN["password"]:
+        return {
+            "role": "admin",
+            "name": ADMIN["name"],
+            "user_id": username
+        }
+    return None
+
+# ========== AI 调用函数（支持 RAG）==========
 def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, enable_rag=True):
     """调用 DeepSeek API - 支持 RAG 检索增强"""
     
@@ -20,11 +108,14 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
     # RAG 检索
     rag_context = ""
     if enable_rag and user_query:
-        similar_docs = rag_search.search_similar_documents(user_query, match_count=3)
-        if similar_docs:
-            rag_context = "\n\n📚 **学校官方参考资料**：\n\n"
-            for i, doc in enumerate(similar_docs, 1):
-                rag_context += f"【{doc.get('title', '文档')}】\n{doc.get('content', '')[:500]}...\n\n"
+        try:
+            similar_docs = rag_search.search_similar_documents(user_query, match_count=3)
+            if similar_docs:
+                rag_context = "\n\n📚 **学校官方参考资料**：\n\n"
+                for i, doc in enumerate(similar_docs, 1):
+                    rag_context += f"【{doc.get('title', '文档')}】\n{doc.get('content', '')[:500]}...\n\n"
+        except Exception as e:
+            print(f"RAG检索失败: {e}")
     
     full_messages = [{"role": "system", "content": system_prompt}]
     
@@ -51,54 +142,8 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
     except Exception as e:
         print(f"API调用失败: {e}")
         return None
-# 导入学生数据
-try:
-    from students_id import STUDENTS
-except ImportError:
-    # 如果文件不存在，创建默认数据
-    STUDENTS = {
-        "2024001": {"name": "张三", "password": "237095", "student_id": "2024001"},
-        "2024002": {"name": "李四", "password": "237095", "student_id": "2024002"},
-        "2024003": {"name": "王五", "password": "237095", "student_id": "2024003"},
-        "2024004": {"name": "赵六", "password": "237095", "student_id": "2024004"},
-        "2024005": {"name": "小明", "password": "237095", "student_id": "2024005"},
-    }
 
-# 管理员配置（也可以单独建文件）
-ADMIN = {
-    "username": "admin",
-    "password": "123456",
-    "name": "系统管理员"
-}
-
-def hash_password(password):
-    """密码加密"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def verify_student(student_id, password):
-    """验证学生登录"""
-    if student_id in STUDENTS:
-        student = STUDENTS[student_id]
-        # 直接比对密码（或加密后比对）
-        if student.get("password") == password:
-            return {
-                "role": "student",
-                "name": student["name"],
-                "user_id": student_id,
-                "student_id": student_id
-            }
-    return None
-
-def verify_admin(username, password):
-    """验证管理员登录"""
-    if username == ADMIN["username"] and password == ADMIN["password"]:
-        return {
-            "role": "admin",
-            "name": ADMIN["name"],
-            "user_id": username
-        }
-    return None
-
+# ========== 登录页面 ==========
 def show_login_page():
     """显示登录页面"""
     
@@ -225,7 +270,7 @@ def show_login_page():
     if st.session_state.login_error:
         st.markdown(f'<div class="error-msg">⚠️ {st.session_state.login_error}</div>', unsafe_allow_html=True)
     
-    # ========== 学生登录（学号 + 密码）==========
+    # 学生登录
     if login_tab == "👨‍🎓 学生登录":
         student_id = st.text_input("📚 学号", placeholder="请输入学号（如：2024001）", key="student_id_input")
         student_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码（默认：237095）", key="student_password")
@@ -246,7 +291,7 @@ def show_login_page():
                 else:
                     st.session_state.login_error = "学号或密码错误"
     
-    # ========== 管理员登录 ==========
+    # 管理员登录
     else:
         admin_username = st.text_input("👤 用户名", placeholder="请输入用户名", key="admin_user")
         admin_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码", key="admin_pass")
