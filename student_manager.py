@@ -6,21 +6,33 @@ import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime
 
-def init_supabase() -> Client:
-    """初始化 Supabase 客户端"""
+# 全局变量缓存客户端
+_supabase_client = None
+
+def get_supabase_client() -> Client:
+    """懒加载 Supabase 客户端"""
+    global _supabase_client
+    if _supabase_client is not None:
+        return _supabase_client
+    
     try:
-        # 直接从 st.secrets 读取
-        SUPABASE_URL = st.secrets["SUPABASE_URL"]
-        SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+        # 尝试从 st.secrets 读取
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
         
-        return create_client(SUPABASE_URL, SUPABASE_KEY)
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            # 如果在 Streamlit Cloud 上，这里不应该发生
+            return None
+        
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        return _supabase_client
     except Exception as e:
-        st.error(f"Supabase 初始化失败: {e}")
+        print(f"Supabase 初始化失败: {e}")
         return None
 
 def get_all_students():
     """获取所有学生列表"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return []
     
@@ -33,7 +45,7 @@ def get_all_students():
 
 def get_student_by_id(student_id: str):
     """根据学号获取学生信息"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return None
     
@@ -46,7 +58,7 @@ def get_student_by_id(student_id: str):
 
 def verify_student(student_id: str, password: str):
     """验证学生登录"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return None
     
@@ -67,7 +79,7 @@ def verify_student(student_id: str, password: str):
 
 def add_student(student_id: str, name: str, password: str = "237095", phone: str = "", class_name: str = ""):
     """添加学生"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return False, "数据库连接失败"
     
@@ -90,7 +102,7 @@ def add_student(student_id: str, name: str, password: str = "237095", phone: str
 
 def delete_student(student_id: str):
     """删除学生"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return False, "数据库连接失败"
     
@@ -102,7 +114,7 @@ def delete_student(student_id: str):
 
 def update_student(student_id: str, name: str = None, password: str = None, phone: str = None, class_name: str = None):
     """更新学生信息"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return False, "数据库连接失败"
     
@@ -133,7 +145,7 @@ def reset_student_password(student_id: str):
 
 def get_student_count():
     """获取学生总数"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
         return 0
     
