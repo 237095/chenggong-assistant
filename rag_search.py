@@ -9,13 +9,11 @@ def get_supabase():
     return st.session_state.get("supabase", None)
 
 def search_similar_documents(query: str, match_count: int = 5) -> list:
-    """搜索相关文档 - 同时搜索标题和内容"""
     supabase = get_supabase()
     if not supabase:
         return []
     
     try:
-        # 方法1：搜索内容
         response = supabase.table("documents")\
             .select("title, category, content")\
             .ilike("content", f"%{query}%")\
@@ -25,7 +23,6 @@ def search_similar_documents(query: str, match_count: int = 5) -> list:
         if response.data and len(response.data) > 0:
             return response.data
         
-        # 方法2：如果内容搜索不到，搜索标题
         response = supabase.table("documents")\
             .select("title, category, content")\
             .ilike("title", f"%{query}%")\
@@ -38,7 +35,6 @@ def search_similar_documents(query: str, match_count: int = 5) -> list:
         return []
 
 def format_search_results(results: list) -> str:
-    """格式化搜索结果"""
     if not results:
         return ""
     
@@ -53,6 +49,5 @@ def format_search_results(results: list) -> str:
     return formatted
 
 def get_rag_context(user_query: str, match_count: int = 5) -> str:
-    """获取 RAG 上下文"""
     similar_docs = search_similar_documents(user_query, match_count)
     return format_search_results(similar_docs)
