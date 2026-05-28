@@ -6,3 +6,7 @@ beautifulsoup4
 requests
 duckduckgo-search
 user-agents
+supabase
+python-dotenv
+openai>=1.0.0
+tiktoken
