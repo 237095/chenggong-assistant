@@ -20,13 +20,6 @@ try:
 except ImportError:
     SEARCH_AVAILABLE = False
 
-# 尝试导入 Supabase
-try:
-    from supabase import create_client
-    SUPABASE_AVAILABLE = True
-except ImportError:
-    SUPABASE_AVAILABLE = False
-
 # ========== 配置 ==========
 # 从 Secrets 读取 API Key
 DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
@@ -72,31 +65,17 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
+# ========== 获取 Supabase 客户端（从 session_state）==========
+def get_supabase_client():
+    """从 session_state 获取 Supabase 客户端"""
+    return st.session_state.get("supabase", None)
+
 # ========== RAG 文档检索功能 ==========
-
-def init_supabase():
-    """初始化 Supabase 客户端"""
-    if not SUPABASE_AVAILABLE:
-        return None
-    try:
-        # 从 session_state 获取，如果没有则从 secrets 读取
-        supabase = st.session_state.get("supabase", None)
-        if supabase:
-            return supabase
-        
-        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-        SUPABASE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY", "") or st.secrets.get("SUPABASE_KEY", "")
-        if SUPABASE_URL and SUPABASE_KEY:
-            return create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        print(f"Supabase 初始化失败: {e}")
-    return None
-
 def search_school_documents(query: str, limit: int = 5) -> str:
     """从 Supabase documents 表中搜索相关学校文档"""
-    supabase = init_supabase()
+    supabase = get_supabase_client()
     if not supabase:
-        st.warning("⚠️ Supabase 连接失败")
+        st.warning("⚠️ Supabase 客户端未就绪")
         return ""
     
     try:
@@ -138,7 +117,6 @@ def search_school_documents(query: str, limit: int = 5) -> str:
             return context
         else:
             st.warning("⚠️ 未找到相关文档")
-            # 显示前3个文档标题帮助调试
             sample = supabase.table("documents").select("title").limit(3).execute()
             if sample.data:
                 st.write("📋 数据库中的文档示例：")
@@ -351,7 +329,6 @@ PERSONAS = {
 }
 
 def select_persona(question):
-    """根据问题选择人格"""
     q = question.lower()
     if any(word in q for word in ["python", "java", "html", "代码", "编程", "选课", "ai", "人工智能"]):
         return "longbiao"
@@ -361,7 +338,6 @@ def select_persona(question):
         return "tongyan"
 
 def get_persona_prefix(persona_key, question=None):
-    """获取人格前缀，只有校园生活问题才显示口头禅"""
     persona = PERSONAS[persona_key]
     base_prefix = f"**{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}** {persona['avatar']}"
     
@@ -376,7 +352,6 @@ def get_persona_prefix(persona_key, question=None):
     return f"{base_prefix}\n\n"
 
 def get_system_prompt(persona_key):
-    """系统提示词"""
     persona = PERSONAS[persona_key]
     return f"""你是"{SCHOOL_NAME}的成工职小助手"，你是{persona['name']}{'学长' if persona_key != 'tongyan' else '学姐'}。
 
@@ -390,7 +365,7 @@ def get_system_prompt(persona_key):
 4. 如果是关于学校的问题，要结合成都工业职业技术学院的实际情况回答
 5. 如果是专业推荐、就业等咨询类问题，要给出有建设性的建议"""
 
-# ========== 本地知识库（仅作为快速响应备用）==========
+# ========== 本地知识库 ==========
 LOCAL_KNOWLEDGE = {
     "图书馆": "📚 图书馆开放时间：周一至周五 8:00-22:00，周末 9:00-21:00\n📍 位置：图文信息中心1-4层\n💳 凭校园卡借阅，每人限借5本",
     "食堂": "🍽️ 食堂营业时间：早餐6:30-9:00，午餐11:00-13:30，晚餐17:00-19:30\n\n🍜 推荐：二食堂牛肉面、一食堂麻辣烫\n💳 支持校园卡/支付宝",
@@ -406,7 +381,6 @@ LOCAL_KNOWLEDGE = {
 }
 
 def get_local_answer(question):
-    """快速本地匹配"""
     q = question.lower()
     for key, answer in LOCAL_KNOWLEDGE.items():
         if key in q:
@@ -415,7 +389,6 @@ def get_local_answer(question):
 
 # ========== 联网搜索 ==========
 def search_online(query, max_results=2):
-    """联网搜索"""
     if not SEARCH_AVAILABLE:
         return None
     try:
@@ -427,8 +400,6 @@ def search_online(query, max_results=2):
 
 # ========== AI 调用 ==========
 def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, rag_context=None):
-    """调用DeepSeek API - 支持RAG上下文"""
-    
     if rag_context:
         st.write(f"📚 rag_context 长度: {len(rag_context)}")
     
@@ -471,9 +442,8 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
         st.error(f"❌ API调用失败: {e}")
         return None
 
-# ========== 核心回复函数（支持RAG）==========
+# ========== 核心回复函数 ==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
-    """核心回复函数 - 支持RAG检索增强"""
     lower = user_input.lower()
     
     # 百度热点查询
@@ -524,9 +494,8 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None, None)
         return response if response else "表格生成暂时不可用"
     
-    # ========== 普通问答：使用 RAG 检索增强 ==========
+    # 普通问答
     else:
-        # 1. 从 Supabase 检索相关学校文档
         st.write("🔍 正在检索学校文档...")
         rag_context = search_school_documents(user_input, limit=3)
         st.write(f"📚 检索结果长度: {len(rag_context)}")
@@ -536,14 +505,12 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         else:
             st.warning("⚠️ 未找到相关文档")
         
-        # 2. 联网搜索（如果开启）
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
             sr = search_online(user_input)
             if sr:
                 search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
         
-        # 3. 调用 AI（rag_context 单独传递）
         st.write("🤖 正在调用 AI...")
         response = call_deepseek(
             [{"role": "user", "content": user_input}], 
@@ -557,12 +524,10 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
             st.success("✅ AI 返回成功")
             return response
         else:
-            # 4. 备用：本地知识库
             local = get_local_answer(user_input)
             if local:
                 st.info("📖 使用本地知识库")
                 return local
-            # 5. 最终兜底
             st.warning("⚠️ 使用兜底回复")
             return f"关于「{user_input}」，我正在学习中。\n\n💡 **你可以尝试：**\n- 换个方式描述问题\n- 询问校园相关问题（图书馆、食堂、课表等）\n- 问我「今天有什么热点」\n- 让我帮你写代码或生成表格"
 
@@ -629,15 +594,12 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 模式设置
-    st.markdown("### ⚙️ 模式设置")
     enable_thinking = st.toggle("🧠 深度思考模式", value=False, help="AI会展示思考过程")
     enable_search = st.toggle("🌐 联网搜索", value=False, help="搜索最新信息")
     enable_hot_summary = st.toggle("📝 AI热点总结", value=True, help="AI自动总结每个热点内容")
     
     st.markdown("---")
     
-    # 热搜板块
     st.markdown("### 🔥 热搜榜")
     show_hot_search = st.toggle("📊 显示百度热搜", value=True)
     
@@ -665,7 +627,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 快捷链接
     st.markdown("### 🔗 快捷链接")
     st.markdown(f"""
     <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -692,14 +653,12 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 清空对话
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
     
     st.markdown("---")
     
-    # 开发团队
     st.markdown("### 👥 开发团队")
     st.markdown("- 尔主龙彪（组长）")
     st.markdown("- 任乾鹏")
@@ -767,7 +726,6 @@ for idx, (question, display) in enumerate(quick_list):
                     prefix = get_persona_prefix(persona_key, question)
                     response = get_ai_response(question, persona_key, enable_thinking, enable_search, enable_hot_summary)
                     
-                    # 热点查询不加人格前缀
                     is_hot = any(word in question.lower() for word in ["热点", "热搜", "今日热点"])
                     if is_hot:
                         full_response = response
@@ -791,7 +749,6 @@ if user_input and user_input.strip():
             prefix = get_persona_prefix(persona_key, user_input)
             response = get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary)
             
-            # 热点查询不加人格前缀
             is_hot = any(word in user_input.lower() for word in ["热点", "热搜", "今日热点"])
             if is_hot:
                 full_response = response
