@@ -5,6 +5,19 @@
 
 import streamlit as st
 from user_agents import parse
+from supabase import create_client
+
+# ========== 最先初始化 Supabase（从 Secrets 读取）==========
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]  # 使用 Service Role Key
+    supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    st.session_state.supabase = supabase_client
+    st.session_state.supabase_ok = True
+except Exception as e:
+    st.session_state.supabase = None
+    st.session_state.supabase_ok = False
+    st.error(f"Supabase 初始化失败: {e}")
 
 # ========== 初始化登录状态 ==========
 if "logged_in" not in st.session_state:
@@ -44,12 +57,13 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：同步文档（增量更新）==========
-    if not st.session_state.docs_synced:
+    # ========== 已登录：同步文档（使用 session_state 中的 supabase）==========
+    if not st.session_state.docs_synced and st.session_state.supabase_ok:
         try:
             import load_docs
             with st.spinner("📚 正在同步学校文档..."):
-                load_docs.load_documents()
+                # 传递 supabase 客户端
+                load_docs.load_documents(st.session_state.supabase)
                 st.session_state.docs_synced = True
         except Exception as e:
             st.warning(f"文档同步失败: {e}")
@@ -79,17 +93,14 @@ def main():
         import admin_panel
         admin_panel.show_admin_panel()
     else:
-        # 学生：显示聊天界面，检测设备类型
         user_agent_string = st.context.headers.get('User-Agent', '')
         user_agent = parse(user_agent_string)
         
         try:
             if user_agent.is_mobile:
-                # 手机端
                 with open("mobile_app.py", "r", encoding="utf-8") as f:
                     exec(f.read(), globals())
             else:
-                # 电脑端
                 with open("desktop_app.py", "r", encoding="utf-8") as f:
                     exec(f.read(), globals())
         except FileNotFoundError as e:
