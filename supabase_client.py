@@ -1,30 +1,26 @@
 """
-Supabase 客户端管理模块 - 延迟加载，确保 Secrets 可用
+Supabase 客户端管理 - 延迟加载
 """
 
 import streamlit as st
-from supabase import create_client, Client
+from supabase import create_client
 
-_supabase_client = None
+_supabase = None
 
-def get_supabase_client() -> Client:
-    """获取 Supabase 客户端（延迟加载，在第一次调用时才初始化）"""
-    global _supabase_client
+def get_supabase():
+    """获取 Supabase 客户端（延迟加载，只在第一次调用时初始化）"""
+    global _supabase
     
-    if _supabase_client is not None:
-        return _supabase_client
+    if _supabase is not None:
+        return _supabase
     
-    # 在函数内部读取 Secrets，此时 Streamlit 已经完全启动
-    try:
-        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-        
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            st.error("❌ 配置错误：请在 Secrets 中配置 SUPABASE_URL 和 SUPABASE_KEY")
-            return None
-        
-        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        return _supabase_client
-    except Exception as e:
-        st.error(f"❌ Supabase 连接失败: {e}")
+    # 在函数内部读取 secrets，此时 Streamlit 已完全启动
+    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+    
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        # 不在这里报错，返回 None，让调用方处理
         return None
+    
+    _supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase
