@@ -44,8 +44,16 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：标记文档已同步（跳过自动同步，避免影响主功能）==========
-    st.session_state.docs_synced = True
+    # ========== 已登录：同步文档（增量更新）==========
+    if not st.session_state.docs_synced:
+        try:
+            import load_docs
+            with st.spinner("📚 正在同步学校文档..."):
+                load_docs.load_documents()
+                st.session_state.docs_synced = True
+        except Exception as e:
+            st.warning(f"文档同步失败: {e}")
+            st.session_state.docs_synced = True
     
     # ========== 显示用户信息 ==========
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
