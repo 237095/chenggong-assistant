@@ -7,7 +7,6 @@ import os
 import re
 
 def read_markdown_files(docs_dir: str = "DOCS") -> list:
-    """读取 DOCS 文件夹中的所有 Markdown 文件"""
     documents = []
     
     if not os.path.exists(docs_dir):
@@ -25,11 +24,9 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # 提取标题
         title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
         title = title_match.group(1) if title_match else filename.replace('.md', '')
         
-        # 判断分类
         if '图书馆' in filename or '畅想书海' in filename:
             category = '图书馆'
         elif '学籍' in filename:
@@ -46,20 +43,9 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
             category = '教学管理'
         elif '评优' in filename:
             category = '评优奖励'
-        elif '实习' in filename:
-            category = '实习管理'
-        elif '社团' in filename:
-            category = '社团管理'
-        elif '助学' in filename or '困难' in filename:
-            category = '助学帮困'
-        elif '国法' in filename or '法规' in filename:
-            category = '法律法规'
-        elif '水电' in filename or '热水' in filename or '洗衣' in filename:
-            category = '校园生活'
         else:
             category = '学校文档'
         
-        # 清理内容（移除图片引用和 base64 图片）
         clean_content = re.sub(r'!\[.*?\]\(.*?\)', '', content)
         clean_content = re.sub(r'<img[^>]*>', '', clean_content)
         clean_content = re.sub(r'data:image/[^;]+;base64,[^\s]+', '', clean_content)
@@ -68,7 +54,7 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
         documents.append({
             "title": title,
             "category": category,
-            "content": clean_content,  # 不限制长度
+            "content": clean_content,
             "metadata": {"source": filename}
         })
         
@@ -77,20 +63,16 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
     return documents
 
 def load_documents(supabase):
-    """加载文档到 Supabase"""
-    
     if not supabase:
         st.error("❌ Supabase 客户端未提供")
         return 0
     
-    # 先清空现有文档
     try:
         supabase.table("documents").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
         st.write("🗑️ 已清空现有文档")
     except Exception as e:
         st.write(f"清空文档时出错: {e}")
     
-    # 读取本地文件
     documents = read_markdown_files()
     if not documents:
         st.warning("未找到文档文件")
@@ -98,7 +80,6 @@ def load_documents(supabase):
     
     st.write(f"共找到 {len(documents)} 个文档")
     
-    # 插入文档
     count = 0
     for doc in documents:
         try:
@@ -112,7 +93,6 @@ def load_documents(supabase):
     return count
 
 def get_document_count(supabase):
-    """获取文档数量"""
     if not supabase:
         return 0
     
