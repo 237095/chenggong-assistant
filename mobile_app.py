@@ -1,5 +1,5 @@
 """
-成工职小助手 - 手机端（界面优化版）
+成工职小助手 - 手机端（RAG增强版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -19,6 +19,13 @@ try:
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
+
+# 尝试导入 Supabase
+try:
+    from supabase import create_client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
 
 # ========== 配置 ==========
 DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
@@ -58,6 +65,49 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
             LOGO_BASE64 = base64.b64encode(img_file.read()).decode()
     except:
         pass
+
+# ========== RAG 文档检索功能 ==========
+
+def init_supabase():
+    """初始化 Supabase 客户端"""
+    if not SUPABASE_AVAILABLE:
+        return None
+    try:
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+        if SUPABASE_URL and SUPABASE_KEY:
+            return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Supabase 初始化失败: {e}")
+    return None
+
+def search_school_documents(query: str, limit: int = 5) -> str:
+    """从 Supabase documents 表中搜索相关学校文档"""
+    supabase = init_supabase()
+    if not supabase:
+        return ""
+    
+    try:
+        # 使用全文搜索
+        response = supabase.table("documents")\
+            .select("title, category, content")\
+            .text_search("content", query)\
+            .limit(limit)\
+            .execute()
+        
+        if response.data and len(response.data) > 0:
+            context = "\n\n📚 **学校官方资料参考**：\n\n"
+            for i, doc in enumerate(response.data, 1):
+                title = doc.get('title', '学校文档')
+                category = doc.get('category', '其他')
+                content = doc.get('content', '')[:500]
+                context += f"**【{i}】{title}** (来自：{category})\n"
+                context += f"{content}\n\n"
+            return context
+        return ""
+    except Exception as e:
+        print(f"文档搜索失败: {e}")
+        return ""
 
 # ========== 百度热搜获取功能 ==========
 def fetch_baidu_hot_search(limit=15):
@@ -257,9 +307,9 @@ def search_online(query, max_results=2):
     except:
         return None
 
-# ========== AI 调用 ==========
-def call_deepseek(messages, persona_key, use_thinking, search_context):
-    """调用DeepSeek API - 使用deepseek-v4-flash模型"""
+# ========== AI 调用（支持RAG上下文）==========
+def call_deepseek(messages, persona_key, use_thinking, search_context, rag_context=None):
+    """调用DeepSeek API - 支持RAG上下文"""
     system_prompt = get_system_prompt(persona_key)
     
     full = [{"role": "system", "content": system_prompt}]
@@ -268,13 +318,16 @@ def call_deepseek(messages, persona_key, use_thinking, search_context):
         full.append({"role": "user", "content": "请先展示你的💭思考过程，再给出答案。"})
     
     if search_context:
-        full.append({"role": "user", "content": f"参考信息：\n{search_context}"})
+        full.append({"role": "user", "content": f"🌐 联网搜索结果：\n{search_context}"})
+    
+    if rag_context:
+        full.append({"role": "user", "content": f"📖 学校官方资料：\n{rag_context}"})
     
     full.extend(messages[-10:])  # 限制历史消息为10轮
     
     try:
         r = client.chat.completions.create(
-            model="deepseek-v4-flash",  # 使用最新V4模型
+            model="deepseek-v4-flash",
             messages=full,
             temperature=0.8,
             max_tokens=1500,
@@ -285,7 +338,7 @@ def call_deepseek(messages, persona_key, use_thinking, search_context):
         print(f"API调用失败: {e}")
         return None
 
-# ========== 回复函数 ==========
+# ========== 回复函数（支持RAG检索）==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
@@ -298,7 +351,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
                 return formatted
         return "暂时无法获取热搜数据"
     
-    # 本地知识库
+    # 本地知识库快速匹配
     local = get_local_answer(user_input)
     if local:
         return local
@@ -310,7 +363,10 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             return "📢 最新通知：\n\n" + "\n".join([f"• {n}" for n in news])
         return f"📢 [查看通知公告]({SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm)"
     
-    # 联网搜索
+    # ========== RAG 检索学校文档 ==========
+    rag_context = search_school_documents(user_input, limit=3)
+    
+    # 联网搜索（如果开启）
     search_ctx = None
     if enable_search and SEARCH_AVAILABLE:
         try:
@@ -321,14 +377,20 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         except:
             pass
     
-    # 调用AI
+    # 调用AI（带RAG上下文）
     history = st.session_state.messages[-10:] if len(st.session_state.messages) > 10 else st.session_state.messages
     msgs = [{"role": m["role"], "content": m["content"]} for m in history if m["role"] != "system"]
-    resp = call_deepseek(msgs, persona_key, enable_thinking, search_ctx)
+    resp = call_deepseek(msgs, persona_key, enable_thinking, search_ctx, rag_context)
     
     if resp:
         return resp
-    return f"抱歉，无法回答。试试问：图书馆几点开门？"
+    
+    # 备用：本地知识库
+    local_again = get_local_answer(user_input)
+    if local_again:
+        return local_again
+    
+    return f"关于「{user_input}」，我正在学习中。\n\n💡 **试试问我：**\n- 图书馆几点开门？\n- 课表怎么查？\n- 奖学金怎么申请？\n- 今天有什么热点？"
 
 # ========== 初始化会话 ==========
 if "messages" not in st.session_state:
