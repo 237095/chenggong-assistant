@@ -16,18 +16,17 @@ def get_supabase_client() -> Client:
         return _supabase_client
     
     try:
-        # 尝试从 st.secrets 读取
         SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
         SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
         
         if not SUPABASE_URL or not SUPABASE_KEY:
-            # 如果在 Streamlit Cloud 上，这里不应该发生
+            st.error("请先在 Secrets 中配置 SUPABASE_URL 和 SUPABASE_KEY")
             return None
         
         _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         return _supabase_client
     except Exception as e:
-        print(f"Supabase 初始化失败: {e}")
+        st.error(f"Supabase 连接失败: {e}")
         return None
 
 def get_all_students():
