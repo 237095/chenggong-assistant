@@ -99,6 +99,10 @@ def search_school_documents(query: str, limit: int = 5) -> str:
     try:
         st.write(f"🔍 正在检索: {query}")
         
+        # 先查看表中有多少文档
+        count_resp = supabase.table("documents").select("id", count="exact").execute()
+        st.write(f"📊 数据库中共有 {count_resp.count} 个文档")
+        
         # 使用 ilike 模糊匹配
         response = supabase.table("documents")\
             .select("title, category, content")\
@@ -122,6 +126,12 @@ def search_school_documents(query: str, limit: int = 5) -> str:
             return context
         else:
             st.warning("⚠️ 未找到相关文档")
+            # 显示前3个文档标题帮助调试
+            sample = supabase.table("documents").select("title").limit(3).execute()
+            if sample.data:
+                st.write("📋 数据库中的文档示例：")
+                for doc in sample.data:
+                    st.write(f"   - {doc.get('title', '无标题')}")
         return ""
     except Exception as e:
         st.error(f"文档搜索失败: {e}")
