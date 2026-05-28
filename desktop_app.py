@@ -91,18 +91,14 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
 # ========== RAG 文档检索功能 ==========
 
 def init_supabase():
-    """初始化 Supabase 客户端"""
-    if not SUPABASE_AVAILABLE:
-        return None
+    """初始化 Supabase 客户端 - 硬编码（临时）"""
     try:
-        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-        if SUPABASE_URL and SUPABASE_KEY:
-            return create_client(SUPABASE_URL, SUPABASE_KEY)
+        SUPABASE_URL = "https://hphjwdmnhkdafomoavpn.supabase.co"
+        SUPABASE_KEY = "sb_publishable_5vw4Li96TZbJ87h5WZO-uw_-2pzF-1U"
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
     except Exception as e:
-        print(f"Supabase 初始化失败: {e}")
-    return None
-
+        st.error(f"Supabase 连接失败: {e}")
+        return None
 def search_school_documents(query: str, limit: int = 5) -> str:
     """从 Supabase documents 表中搜索相关学校文档"""
     supabase = init_supabase()
