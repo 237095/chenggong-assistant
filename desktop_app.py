@@ -1,5 +1,5 @@
 """
-成工职小助手 - 电脑端（优化版）
+成工职小助手 - 电脑端（RAG增强版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -19,6 +19,13 @@ try:
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
+
+# 尝试导入 Supabase
+try:
+    from supabase import create_client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
 
 # ========== 配置 ==========
 DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
@@ -59,6 +66,49 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
             LOGO_BASE64 = base64.b64encode(img_file.read()).decode()
     except:
         pass
+
+# ========== RAG 文档检索功能 ==========
+
+def init_supabase():
+    """初始化 Supabase 客户端"""
+    if not SUPABASE_AVAILABLE:
+        return None
+    try:
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+        if SUPABASE_URL and SUPABASE_KEY:
+            return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Supabase 初始化失败: {e}")
+    return None
+
+def search_school_documents(query: str, limit: int = 5) -> str:
+    """从 Supabase documents 表中搜索相关学校文档"""
+    supabase = init_supabase()
+    if not supabase:
+        return ""
+    
+    try:
+        # 使用全文搜索
+        response = supabase.table("documents")\
+            .select("title, category, content")\
+            .text_search("content", query)\
+            .limit(limit)\
+            .execute()
+        
+        if response.data and len(response.data) > 0:
+            context = "\n\n📚 **学校官方资料参考**：\n\n"
+            for i, doc in enumerate(response.data, 1):
+                title = doc.get('title', '学校文档')
+                category = doc.get('category', '其他')
+                content = doc.get('content', '')[:500]
+                context += f"**【{i}】{title}** (来自：{category})\n"
+                context += f"{content}\n\n"
+            return context
+        return ""
+    except Exception as e:
+        print(f"文档搜索失败: {e}")
+        return ""
 
 # ========== 百度热搜获取功能 ==========
 def fetch_baidu_hot_search(limit=15):
@@ -123,7 +173,7 @@ def get_hot_detail_with_ai(keyword):
 🔍 热度原因：[原因说明]"""
         
         response = client.chat.completions.create(
-            model="deepseek-chat",  # ✅ 已改为标准模型
+            model="deepseek-chat",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=300,
@@ -337,8 +387,8 @@ def search_online(query, max_results=2):
         return None
 
 # ========== AI 调用（✅ 已改为标准模型）==========
-def call_deepseek(messages, persona_key, use_thinking=False, search_context=None):
-    """调用DeepSeek API - 使用deepseek-chat模型"""
+def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, rag_context=None):
+    """调用DeepSeek API - 使用deepseek-chat模型，支持RAG上下文"""
     system_prompt = get_system_prompt(persona_key)
     
     full_messages = [{"role": "system", "content": system_prompt}]
@@ -347,13 +397,16 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
         full_messages.append({"role": "user", "content": "请先展示你的💭思考过程，再给出最终答案。"})
     
     if search_context:
-        full_messages.append({"role": "user", "content": f"参考信息：\n{search_context}"})
+        full_messages.append({"role": "user", "content": f"🌐 联网搜索结果：\n{search_context}"})
+    
+    if rag_context:
+        full_messages.append({"role": "user", "content": f"📖 学校官方资料：\n{rag_context}"})
     
     full_messages.extend(messages)
     
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",  # ✅ 已改为标准价格模型（原deepseek-v4-pro价格贵3倍）
+            model="deepseek-chat",
             messages=full_messages,
             temperature=0.8,
             max_tokens=2000,
@@ -364,12 +417,12 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
         print(f"API调用失败: {e}")
         return None
 
-# ========== 核心回复函数 ==========
+# ========== 核心回复函数（支持RAG）==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
-    """核心回复函数"""
+    """核心回复函数 - 支持RAG检索增强"""
     lower = user_input.lower()
     
-    # 百度热点查询
+    # 百度热点查询（不使用RAG）
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "热搜榜", "今日热点"]):
         with st.spinner("正在获取百度热搜..."):
             hot_list = fetch_baidu_hot_search(10)
@@ -408,35 +461,45 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     # 代码生成
     if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
         full_prompt = f"请生成完整的代码：{user_input}\n要求：完整、有注释、可运行，用```语言名```格式。"
-        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
+        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None, None)
         return response if response else "代码生成暂时不可用"
     
     # 表格生成
     elif any(w in lower for w in ["表格", "表", "成绩单", "课程表"]):
         full_prompt = f"请生成Markdown表格：{user_input}\n要求：标准格式，包含列名和示例数据。"
-        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None)
+        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None, None)
         return response if response else "表格生成暂时不可用"
     
-    # 本地知识库
-    local = get_local_answer(user_input)
-    if local:
-        return local
-    
-    # 普通问答
+    # ========== 普通问答：使用 RAG 检索增强 ==========
     else:
+        # 1. 从 Supabase 检索相关学校文档
+        rag_context = search_school_documents(user_input, limit=3)
+        
+        # 2. 联网搜索（如果开启）
         search_ctx = None
         if enable_search and SEARCH_AVAILABLE:
             sr = search_online(user_input)
             if sr:
                 search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
         
-        response = call_deepseek([{"role": "user", "content": user_input}], persona_key, enable_thinking, search_ctx)
+        # 3. 调用 AI（带 RAG 上下文）
+        response = call_deepseek(
+            [{"role": "user", "content": user_input}], 
+            persona_key, 
+            enable_thinking, 
+            search_ctx,
+            rag_context
+        )
         
         if response:
             return response
         else:
+            # 4. 备用：本地知识库
             local = get_local_answer(user_input)
-            return local if local else f"抱歉，我暂时无法回答「{user_input}」。\n\n试试问我：\n- 图书馆几点开门？\n- 课表查询\n- 成绩查询\n- 今天有什么热点？"
+            if local:
+                return local
+            # 5. 最终兜底
+            return f"关于「{user_input}」，我正在学习中。\n\n💡 **你可以尝试：**\n- 换个方式描述问题\n- 询问校园相关问题（图书馆、食堂、课表等）\n- 问我「今天有什么热点」\n- 让我帮你写代码或生成表格"
 
 # ========== CSS样式 ==========
 st.markdown("""
@@ -609,7 +672,6 @@ if "messages" not in st.session_state:
     })
 
 # ========== 显示历史消息 ==========
-# ✅ 限制显示最近的消息，避免页面过长
 MAX_DISPLAY_MESSAGES = 20
 display_messages = st.session_state.messages[-MAX_DISPLAY_MESSAGES:] if len(st.session_state.messages) > MAX_DISPLAY_MESSAGES else st.session_state.messages
 
