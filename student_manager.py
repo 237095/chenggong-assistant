@@ -4,11 +4,11 @@
 
 import streamlit as st
 from datetime import datetime
-from supabase_client import get_supabase_client
+from supabase_client import get_supabase
 
 def get_all_students():
     """获取所有学生列表"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return []
     
@@ -21,7 +21,7 @@ def get_all_students():
 
 def get_student_by_id(student_id: str):
     """根据学号获取学生信息"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return None
     
@@ -34,7 +34,7 @@ def get_student_by_id(student_id: str):
 
 def verify_student(student_id: str, password: str):
     """验证学生登录"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return None
     
@@ -55,7 +55,7 @@ def verify_student(student_id: str, password: str):
 
 def add_student(student_id: str, name: str, password: str = "237095", phone: str = "", class_name: str = ""):
     """添加学生"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return False, "数据库连接失败"
     
@@ -78,7 +78,7 @@ def add_student(student_id: str, name: str, password: str = "237095", phone: str
 
 def delete_student(student_id: str):
     """删除学生"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return False, "数据库连接失败"
     
@@ -90,7 +90,7 @@ def delete_student(student_id: str):
 
 def update_student(student_id: str, name: str = None, password: str = None, phone: str = None, class_name: str = None):
     """更新学生信息"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return False, "数据库连接失败"
     
@@ -121,7 +121,7 @@ def reset_student_password(student_id: str):
 
 def get_student_count():
     """获取学生总数"""
-    supabase = get_supabase_client()
+    supabase = get_supabase()
     if not supabase:
         return 0
     
