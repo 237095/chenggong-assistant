@@ -5,7 +5,7 @@
 import streamlit as st
 from datetime import datetime
 
-# 管理员配置（本地硬编码）
+# 管理员配置（本地硬编码，安全）
 ADMIN = {
     "username": "admin",
     "password": "123456",
@@ -13,7 +13,7 @@ ADMIN = {
 }
 
 def verify_admin(username: str, password: str):
-    """验证管理员登录（本地验证，不依赖 Supabase）"""
+    """验证管理员登录"""
     if username == ADMIN["username"] and password == ADMIN["password"]:
         return {
             "role": "admin",
@@ -25,11 +25,10 @@ def verify_admin(username: str, password: str):
 def show_login_page():
     """显示登录页面"""
     
-    # 初始化错误信息
     if "login_error" not in st.session_state:
         st.session_state.login_error = None
     
-    # 登录页面CSS（保持不变）
+    # CSS 样式（保持不变，省略...）
     st.markdown("""
     <style>
         #MainMenu, header, footer {visibility: hidden; display: none;}
@@ -122,7 +121,6 @@ def show_login_page():
         <div class="subtitle">成都工业职业技术学院 · 智能客服系统</div>
     """, unsafe_allow_html=True)
     
-    # 登录方式切换
     login_tab = st.radio(
         "选择登录方式",
         ["👨‍🎓 学生登录", "👨‍💼 管理员登录"],
@@ -133,11 +131,10 @@ def show_login_page():
     
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
     
-    # 显示错误信息
     if st.session_state.login_error:
         st.markdown(f'<div class="error-msg">⚠️ {st.session_state.login_error}</div>', unsafe_allow_html=True)
     
-    # ========== 学生登录（延迟导入 student_manager）==========
+    # 学生登录
     if login_tab == "👨‍🎓 学生登录":
         student_id = st.text_input("📚 学号", placeholder="请输入学号（如：2024001）", key="student_id_input")
         student_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码（默认：237095）", key="student_password")
@@ -146,7 +143,7 @@ def show_login_page():
             if not student_id or not student_password:
                 st.session_state.login_error = "请填写学号和密码"
             else:
-                # 延迟导入，确保 st.secrets 已经加载
+                # 延迟导入 student_manager
                 import student_manager
                 user = student_manager.verify_student(student_id, student_password)
                 if user:
@@ -160,7 +157,7 @@ def show_login_page():
                 else:
                     st.session_state.login_error = "学号或密码错误"
     
-    # ========== 管理员登录（本地验证）==========
+    # 管理员登录
     else:
         admin_username = st.text_input("👤 用户名", placeholder="请输入用户名", key="admin_user")
         admin_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码", key="admin_pass")
@@ -180,7 +177,6 @@ def show_login_page():
                 else:
                     st.session_state.login_error = "用户名或密码错误"
     
-    # 演示账号提示
     with st.expander("📋 登录说明"):
         st.markdown("""
         **学生登录：**
