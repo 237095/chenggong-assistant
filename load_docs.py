@@ -25,6 +25,7 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
+        # 提取标题
         title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
         title = title_match.group(1) if title_match else filename.replace('.md', '')
         
@@ -45,9 +46,20 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
             category = '教学管理'
         elif '评优' in filename:
             category = '评优奖励'
+        elif '实习' in filename:
+            category = '实习管理'
+        elif '社团' in filename:
+            category = '社团管理'
+        elif '助学' in filename or '困难' in filename:
+            category = '助学帮困'
+        elif '国法' in filename or '法规' in filename:
+            category = '法律法规'
+        elif '水电' in filename or '热水' in filename or '洗衣' in filename:
+            category = '校园生活'
         else:
             category = '学校文档'
         
+        # 清理内容（移除图片引用和 base64 图片）
         clean_content = re.sub(r'!\[.*?\]\(.*?\)', '', content)
         clean_content = re.sub(r'<img[^>]*>', '', clean_content)
         clean_content = re.sub(r'data:image/[^;]+;base64,[^\s]+', '', clean_content)
@@ -56,7 +68,7 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
         documents.append({
             "title": title,
             "category": category,
-            "content": clean_content,
+            "content": clean_content,  # 不限制长度
             "metadata": {"source": filename}
         })
         
@@ -66,6 +78,10 @@ def read_markdown_files(docs_dir: str = "DOCS") -> list:
 
 def load_documents(supabase):
     """加载文档到 Supabase"""
+    
+    if not supabase:
+        st.error("❌ Supabase 客户端未提供")
+        return 0
     
     # 先清空现有文档
     try:
@@ -94,3 +110,14 @@ def load_documents(supabase):
     
     st.success(f"✅ 成功加载 {count} 个文档")
     return count
+
+def get_document_count(supabase):
+    """获取文档数量"""
+    if not supabase:
+        return 0
+    
+    try:
+        response = supabase.table("documents").select("id", count="exact").execute()
+        return response.count if response.count else 0
+    except:
+        return 0
