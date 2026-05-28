@@ -12,6 +12,9 @@ def show_admin_panel():
     
     st.markdown("## 🔧 管理后台")
     
+    # 获取 supabase 客户端
+    supabase = st.session_state.get("supabase", None)
+    
     # 统计卡片
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -20,7 +23,14 @@ def show_admin_panel():
     with col2:
         st.metric("👨‍💼 管理员", 1)
     with col3:
-        doc_count = load_docs.get_document_count()
+        if supabase:
+            try:
+                response = supabase.table("documents").select("id", count="exact").execute()
+                doc_count = response.count if response.count else 0
+            except:
+                doc_count = 0
+        else:
+            doc_count = 0
         st.metric("📚 文档数量", doc_count)
     
     st.markdown("---")
@@ -142,31 +152,53 @@ def show_admin_panel():
     with tab4:
         st.markdown("### 📚 知识库文档管理")
         
+        if not supabase:
+            st.error("❌ Supabase 连接失败，请检查配置")
+            return
+        
         # 显示当前文档数量
-        doc_count = load_docs.get_document_count()
-        st.metric("📄 已加载文档数", doc_count)
+        try:
+            response = supabase.table("documents").select("id", count="exact").execute()
+            doc_count = response.count if response.count else 0
+            st.metric("📄 已加载文档数", doc_count)
+        except Exception as e:
+            st.error(f"获取文档数量失败: {e}")
+        
+        st.markdown("---")
         
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔄 重新加载所有文档", use_container_width=True):
                 with st.spinner("正在重新加载..."):
-                    # 先清空
-                    load_docs.clear_all_documents()
-                    # 重新加载
-                    count = load_docs.load_documents(force_reload=True)
-                    st.success(f"已重新加载 {count} 个文档")
+                    import load_docs
+                    load_docs.load_documents(supabase)
                     st.rerun()
         
         with col2:
             if st.button("🗑️ 清空所有文档", use_container_width=True):
-                success, msg = load_docs.clear_all_documents()
-                if success:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
+                with st.spinner("正在清空..."):
+                    try:
+                        supabase.table("documents").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+                        st.success("已清空所有文档")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"清空失败: {e}")
         
-        st.info("💡 提示：文档存储在 Supabase 中，重新加载会检查并上传新文档，已存在的文档会自动跳过。")
+        st.markdown("---")
+        
+        # 显示文档列表
+        with st.expander("📋 查看文档列表"):
+            try:
+                response = supabase.table("documents").select("title, category").order("title").execute()
+                if response.data:
+                    for doc in response.data:
+                        st.write(f"📄 **{doc.get('title', '无标题')}** (分类: {doc.get('category', '其他')})")
+                else:
+                    st.info("暂无文档")
+            except Exception as e:
+                st.error(f"获取文档列表失败: {e}")
+        
+        st.info("💡 提示：点击「重新加载所有文档」会清空现有文档并从 DOCS 文件夹重新加载。")
 
 def is_admin():
     """检查当前用户是否为管理员"""
