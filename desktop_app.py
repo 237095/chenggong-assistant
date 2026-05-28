@@ -75,16 +75,22 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
 # ========== RAG 文档检索功能 ==========
 
 def init_supabase():
-    """初始化 Supabase 客户端 - 硬编码（临时）"""
+    """初始化 Supabase 客户端"""
     if not SUPABASE_AVAILABLE:
         return None
     try:
-        SUPABASE_URL = "https://hphjwdmnhkdafomoavpn.supabase.co"
-        SUPABASE_KEY = "sb_publishable_5vw4Li96TZbJ87h5WZO-uw_-2pzF-1U"
-        return create_client(SUPABASE_URL, SUPABASE_KEY)
+        # 从 session_state 获取，如果没有则从 secrets 读取
+        supabase = st.session_state.get("supabase", None)
+        if supabase:
+            return supabase
+        
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY", "") or st.secrets.get("SUPABASE_KEY", "")
+        if SUPABASE_URL and SUPABASE_KEY:
+            return create_client(SUPABASE_URL, SUPABASE_KEY)
     except Exception as e:
-        st.error(f"Supabase 连接失败: {e}")
-        return None
+        print(f"Supabase 初始化失败: {e}")
+    return None
 
 def search_school_documents(query: str, limit: int = 5) -> str:
     """从 Supabase documents 表中搜索相关学校文档"""
@@ -100,12 +106,21 @@ def search_school_documents(query: str, limit: int = 5) -> str:
         count_resp = supabase.table("documents").select("id", count="exact").execute()
         st.write(f"📊 数据库中共有 {count_resp.count} 个文档")
         
-        # 使用 ilike 模糊匹配
+        # 方法1：搜索内容
         response = supabase.table("documents")\
             .select("title, category, content")\
             .ilike("content", f"%{query}%")\
             .limit(limit)\
             .execute()
+        
+        # 方法2：如果内容搜索不到，搜索标题
+        if not response.data or len(response.data) == 0:
+            st.write("🔍 内容搜索无结果，尝试搜索标题...")
+            response = supabase.table("documents")\
+                .select("title, category, content")\
+                .ilike("title", f"%{query}%")\
+                .limit(limit)\
+                .execute()
         
         st.write(f"📊 检索到 {len(response.data) if response.data else 0} 条相关文档")
         
@@ -443,10 +458,8 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
             timeout=60
         )
         
-        # 打印原始返回内容
         result = response.choices[0].message.content
         st.write(f"📥 API返回内容长度: {len(result)}")
-        st.write(f"📥 API返回内容前200字符: {result[:200] if result else '空'}")
         
         if result:
             st.success("✅ API 调用成功")
@@ -537,7 +550,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
             persona_key, 
             enable_thinking, 
             search_ctx,
-            rag_context  # 单独传递
+            rag_context
         )
         
         if response:
