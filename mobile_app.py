@@ -28,9 +28,12 @@ except ImportError:
     SUPABASE_AVAILABLE = False
 
 # ========== 配置 ==========
-DEEPSEEK_API_KEY = "sk-a79bb0ea54fb499eb301759f8f0a3924"
+DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
+if not DEEPSEEK_API_KEY:
+    st.error("请先在 Secrets 中配置 DEEPSEEK_API_KEY")
+    st.stop()
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url=DEEPSEEK_BASE_URL
