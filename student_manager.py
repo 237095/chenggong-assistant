@@ -3,31 +3,11 @@
 """
 
 import streamlit as st
-from supabase import create_client, Client
 from datetime import datetime
 
-# 全局变量缓存客户端
-_supabase_client = None
-
-def get_supabase_client() -> Client:
-    """懒加载 Supabase 客户端"""
-    global _supabase_client
-    if _supabase_client is not None:
-        return _supabase_client
-    
-    try:
-        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-        
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            st.error("请先在 Secrets 中配置 SUPABASE_URL 和 SUPABASE_KEY")
-            return None
-        
-        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        return _supabase_client
-    except Exception as e:
-        st.error(f"Supabase 连接失败: {e}")
-        return None
+def get_supabase_client():
+    """从 session_state 获取 Supabase 客户端"""
+    return st.session_state.get("supabase_client", None)
 
 def get_all_students():
     """获取所有学生列表"""
