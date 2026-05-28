@@ -63,33 +63,12 @@ def verify_student(student_id: str, password: str):
         print(f"验证学生失败: {e}")
         return None
 
-def verify_admin(username: str, password: str):
-    """验证管理员登录"""
-    supabase = init_supabase()
-    if not supabase:
-        return None
-    
-    try:
-        response = supabase.table("admins").select("*").eq("username", username).eq("password", password).execute()
-        if response.data and len(response.data) > 0:
-            admin = response.data[0]
-            return {
-                "role": "admin",
-                "name": admin["name"],
-                "user_id": admin["username"]
-            }
-        return None
-    except Exception as e:
-        print(f"验证管理员失败: {e}")
-        return None
-
 def add_student(student_id: str, name: str, password: str = "237095", phone: str = "", class_name: str = ""):
     """添加学生"""
     supabase = init_supabase()
     if not supabase:
         return False, "数据库连接失败"
     
-    # 检查学号是否已存在
     existing = get_student_by_id(student_id)
     if existing:
         return False, f"学号 {student_id} 已存在"
