@@ -1,76 +1,66 @@
 """
 登录模块 - 成工职小助手
-成都工业职业技术学院
+使用 students_id.py 存储学生信息
 """
 
 import streamlit as st
-import random
 import hashlib
-import json
-import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# ========== 用户数据存储文件 ==========
-USER_DATA_FILE = "users.json"
+# 导入学生数据
+try:
+    from students_id import STUDENTS
+except ImportError:
+    # 如果文件不存在，创建默认数据
+    STUDENTS = {
+        "2024001": {"name": "张三", "password": "237095", "student_id": "2024001"},
+        "2024002": {"name": "李四", "password": "237095", "student_id": "2024002"},
+        "2024003": {"name": "王五", "password": "237095", "student_id": "2024003"},
+        "2024004": {"name": "赵六", "password": "237095", "student_id": "2024004"},
+        "2024005": {"name": "小明", "password": "237095", "student_id": "2024005"},
+    }
 
-def load_users():
-    """加载用户数据"""
-    if os.path.exists(USER_DATA_FILE):
-        try:
-            with open(USER_DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+# 管理员配置（也可以单独建文件）
+ADMIN = {
+    "username": "admin",
+    "password": "123456",
+    "name": "系统管理员"
+}
 
-def save_users(users):
-    """保存用户数据"""
-    with open(USER_DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
+def hash_password(password):
+    """密码加密"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def init_default_users():
-    """初始化默认用户"""
-    users = load_users()
-    
-    # 管理员账号
-    if "admin" not in users:
-        users["admin"] = {
-            "role": "admin",
-            "name": "管理员",
-            "password_hash": hashlib.sha256("123456".encode()).hexdigest(),
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-    
-    # 示例学生账号
-    demo_students = [
-        {"phone": "13800138000", "name": "张三", "student_id": "2024001"},
-        {"phone": "13900139000", "name": "李四", "student_id": "2024002"},
-        {"phone": "13700137000", "name": "王五", "student_id": "2024003"}
-    ]
-    
-    for student in demo_students:
-        if student["phone"] not in users:
-            users[student["phone"]] = {
+def verify_student(student_id, password):
+    """验证学生登录"""
+    if student_id in STUDENTS:
+        student = STUDENTS[student_id]
+        # 直接比对密码（或加密后比对）
+        if student.get("password") == password:
+            return {
                 "role": "student",
                 "name": student["name"],
-                "phone": student["phone"],
-                "student_id": student["student_id"],
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "user_id": student_id,
+                "student_id": student_id
             }
-    
-    save_users(users)
+    return None
 
-# 初始化默认用户
-init_default_users()
+def verify_admin(username, password):
+    """验证管理员登录"""
+    if username == ADMIN["username"] and password == ADMIN["password"]:
+        return {
+            "role": "admin",
+            "name": ADMIN["name"],
+            "user_id": username
+        }
+    return None
 
 def show_login_page():
-    """显示登录页面，返回登录是否成功"""
+    """显示登录页面"""
     
-    # 初始化登录相关状态
+    # 初始化错误信息
     if "login_error" not in st.session_state:
         st.session_state.login_error = None
-    if "verification_code" not in st.session_state:
-        st.session_state.verification_code = {}
     
     # 登录页面CSS
     st.markdown("""
@@ -126,16 +116,6 @@ def show_login_page():
         .error-msg {
             background: #fee2e2;
             color: #dc2626;
-            padding: 10px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        
-        .success-msg {
-            background: #dcfce7;
-            color: #16a34a;
             padding: 10px;
             border-radius: 12px;
             font-size: 0.8rem;
@@ -201,26 +181,26 @@ def show_login_page():
     if st.session_state.login_error:
         st.markdown(f'<div class="error-msg">⚠️ {st.session_state.login_error}</div>', unsafe_allow_html=True)
     
-    # ========== 学生登录 ==========
+    # ========== 学生登录（学号 + 密码）==========
     if login_tab == "👨‍🎓 学生登录":
-        phone = st.text_input("📱 手机号", placeholder="请输入11位手机号", key="student_phone")
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            verification_code = st.text_input("📧 验证码", placeholder="请输入6位验证码", key="student_code")
-        with col2:
-            if st.button("获取验证码", key="get_code"):
-                if phone and len(phone) == 11 and phone.isdigit():
-                    code = generate_verification_code(phone)
-                    st.markdown(f'<div class="success-msg">✅ 验证码：{code}</div>', unsafe_allow_html=True)
-                else:
-                    st.session_state.login_error = "请输入正确的手机号"
-                    st.rerun()
+        student_id = st.text_input("📚 学号", placeholder="请输入学号（如：2024001）", key="student_id_input")
+        student_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码（默认：237095）", key="student_password")
         
         if st.button("登 录", key="student_login_btn"):
-            success = student_login(phone, verification_code)
-            if success:
-                st.rerun()
+            if not student_id or not student_password:
+                st.session_state.login_error = "请填写学号和密码"
+            else:
+                user = verify_student(student_id, student_password)
+                if user:
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = "student"
+                    st.session_state.user_name = user["name"]
+                    st.session_state.user_id = user["user_id"]
+                    st.session_state.user_student_id = user["student_id"]
+                    st.session_state.login_error = None
+                    st.rerun()
+                else:
+                    st.session_state.login_error = "学号或密码错误"
     
     # ========== 管理员登录 ==========
     else:
@@ -228,23 +208,30 @@ def show_login_page():
         admin_password = st.text_input("🔒 密码", type="password", placeholder="请输入密码", key="admin_pass")
         
         if st.button("登 录", key="admin_login_btn"):
-            success = admin_login(admin_username, admin_password)
-            if success:
-                st.rerun()
+            if not admin_username or not admin_password:
+                st.session_state.login_error = "请填写用户名和密码"
+            else:
+                user = verify_admin(admin_username, admin_password)
+                if user:
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = "admin"
+                    st.session_state.user_name = user["name"]
+                    st.session_state.user_id = user["user_id"]
+                    st.session_state.login_error = None
+                    st.rerun()
+                else:
+                    st.session_state.login_error = "用户名或密码错误"
     
     # 演示账号提示
-    with st.expander("📋 演示账号"):
+    with st.expander("📋 登录说明"):
         st.markdown("""
-        **管理员账号：**
+        **学生登录：**
+        - 使用**学号**登录
+        - 默认密码：`237095`
+        
+        **管理员登录：**
         - 用户名：`admin`
         - 密码：`123456`
-        
-        **学生账号（验证码登录）：**
-        - `13800138000`（张三）
-        - `13900139000`（李四）
-        - `13700137000`（王五）
-        
-        > 验证码为6位数字，点击获取验证码后会显示
         """)
     
     st.markdown(f"""
@@ -255,111 +242,11 @@ def show_login_page():
     </div>
     """, unsafe_allow_html=True)
 
-def generate_verification_code(phone):
-    """生成验证码（模拟）"""
-    code = str(random.randint(100000, 999999))
-    if "verification_codes" not in st.session_state:
-        st.session_state.verification_codes = {}
-    st.session_state.verification_codes[phone] = {
-        "code": code,
-        "expires_at": datetime.now() + timedelta(minutes=5)
-    }
-    return code
-
-def verify_code(phone, code):
-    """验证验证码"""
-    if "verification_codes" not in st.session_state:
-        return False
-    if phone not in st.session_state.verification_codes:
-        return False
-    
-    code_data = st.session_state.verification_codes[phone]
-    if datetime.now() > code_data["expires_at"]:
-        del st.session_state.verification_codes[phone]
-        return False
-    
-    if code_data["code"] == code:
-        del st.session_state.verification_codes[phone]
-        return True
-    
-    return False
-
-def student_login(phone, verification_code):
-    """学生手机验证码登录"""
-    if not phone or not verification_code:
-        st.session_state.login_error = "请填写手机号和验证码"
-        return False
-    
-    if len(phone) != 11 or not phone.isdigit():
-        st.session_state.login_error = "请输入正确的11位手机号"
-        return False
-    
-    if not verify_code(phone, verification_code):
-        st.session_state.login_error = "验证码错误或已过期"
-        return False
-    
-    users = load_users()
-    if phone in users and users[phone]["role"] == "student":
-        st.session_state.logged_in = True
-        st.session_state.user_role = "student"
-        st.session_state.user_name = users[phone]["name"]
-        st.session_state.user_id = phone
-        st.session_state.login_error = None
-        return True
-    else:
-        # 新用户自动注册
-        users[phone] = {
-            "role": "student",
-            "name": f"同学{phone[-4:]}",
-            "phone": phone,
-            "student_id": f"AUTO{int(datetime.now().timestamp())}",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        save_users(users)
-        
-        st.session_state.logged_in = True
-        st.session_state.user_role = "student"
-        st.session_state.user_name = users[phone]["name"]
-        st.session_state.user_id = phone
-        st.session_state.login_error = None
-        return True
-
-def admin_login(username, password):
-    """管理员账号密码登录"""
-    if not username or not password:
-        st.session_state.login_error = "请填写用户名和密码"
-        return False
-    
-    users = load_users()
-    if username in users and users[username]["role"] == "admin":
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        if users[username]["password_hash"] == password_hash:
-            st.session_state.logged_in = True
-            st.session_state.user_role = "admin"
-            st.session_state.user_name = users[username]["name"]
-            st.session_state.user_id = username
-            st.session_state.login_error = None
-            return True
-    
-    st.session_state.login_error = "用户名或密码错误"
-    return False
-
 def logout():
     """退出登录"""
     st.session_state.logged_in = False
     st.session_state.user_role = None
     st.session_state.user_name = None
     st.session_state.user_id = None
+    st.session_state.user_student_id = None
     st.session_state.login_error = None
-
-def check_login_status():
-    """检查登录状态"""
-    return st.session_state.get("logged_in", False)
-
-def get_current_user():
-    """获取当前用户信息"""
-    return {
-        "role": st.session_state.get("user_role"),
-        "name": st.session_state.get("user_name"),
-        "id": st.session_state.get("user_id")
-    }
