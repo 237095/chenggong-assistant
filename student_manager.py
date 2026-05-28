@@ -8,13 +8,15 @@ from datetime import datetime
 
 def init_supabase() -> Client:
     """初始化 Supabase 客户端"""
-    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-    
-    if not SUPABASE_URL or not SUPABASE_KEY:
+    try:
+        # 直接从 st.secrets 读取
+        SUPABASE_URL = st.secrets["SUPABASE_URL"]
+        SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+        
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        st.error(f"Supabase 初始化失败: {e}")
         return None
-    
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_all_students():
     """获取所有学生列表"""
