@@ -1,17 +1,10 @@
 """
-管理员后台 - 成工职小助手
-仅管理员可访问
+管理员后台 - 使用 Supabase 管理学生
 """
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-
-# 导入学生数据
-try:
-    from students_id import STUDENTS, add_student, delete_student, reset_password
-except ImportError:
-    from students_id import STUDENTS, add_student, delete_student, reset_password
+import student_manager
 
 def show_admin_panel():
     """显示管理员后台"""
@@ -21,7 +14,8 @@ def show_admin_panel():
     # 统计卡片
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("👨‍🎓 学生总数", len(STUDENTS))
+        student_count = student_manager.get_student_count()
+        st.metric("👨‍🎓 学生总数", student_count)
     with col2:
         st.metric("👨‍💼 管理员", 1)
     
@@ -34,53 +28,71 @@ def show_admin_panel():
     with tab1:
         st.markdown("### 学生列表")
         
-        if STUDENTS:
+        students = student_manager.get_all_students()
+        if students:
             # 转换为DataFrame显示
             data = []
-            for sid, info in STUDENTS.items():
+            for s in students:
                 data.append({
-                    "学号": sid,
-                    "姓名": info["name"],
-                    "密码": info["password"],
+                    "学号": s.get("student_id", ""),
+                    "姓名": s.get("name", ""),
+                    "密码": "••••••",
+                    "班级": s.get("class_name", ""),
+                    "手机号": s.get("phone", ""),
+                    "注册时间": s.get("created_at", "")[:10] if s.get("created_at") else ""
                 })
             df = pd.DataFrame(data)
             st.dataframe(df, use_container_width=True)
             
             st.markdown("---")
-            st.markdown("### 删除学生")
             
+            # 删除学生
+            st.markdown("### 删除学生")
             col1, col2 = st.columns([3, 1])
             with col1:
-                student_to_delete = st.selectbox(
-                    "选择要删除的学生",
-                    options=list(STUDENTS.keys()),
-                    format_func=lambda x: f"{x} - {STUDENTS[x]['name']}",
-                    key="delete_select"
-                )
+                student_options = {s["student_id"]: f"{s['student_id']} - {s['name']}" for s in students}
+                if student_options:
+                    student_to_delete = st.selectbox(
+                        "选择要删除的学生",
+                        options=list(student_options.keys()),
+                        format_func=lambda x: student_options[x]
+                    )
+                else:
+                    student_to_delete = None
+                    st.info("暂无学生数据")
+            
             with col2:
-                if st.button("🗑️ 删除", key="delete_btn"):
-                    if delete_student(student_to_delete):
+                if student_to_delete and st.button("🗑️ 删除", key="delete_btn"):
+                    success, msg = student_manager.delete_student(student_to_delete)
+                    if success:
                         st.success(f"已删除学生: {student_to_delete}")
                         st.rerun()
                     else:
-                        st.error("删除失败")
+                        st.error(msg)
             
+            # 重置密码
             st.markdown("### 重置学生密码")
             col1, col2 = st.columns([3, 1])
             with col1:
-                student_to_reset = st.selectbox(
-                    "选择要重置密码的学生",
-                    options=list(STUDENTS.keys()),
-                    format_func=lambda x: f"{x} - {STUDENTS[x]['name']}",
-                    key="reset_select"
-                )
+                if student_options:
+                    student_to_reset = st.selectbox(
+                        "选择要重置密码的学生",
+                        options=list(student_options.keys()),
+                        format_func=lambda x: student_options[x],
+                        key="reset_select"
+                    )
+                else:
+                    student_to_reset = None
+                    st.info("暂无学生数据")
+            
             with col2:
-                if st.button("🔄 重置密码", key="reset_btn"):
-                    if reset_password(student_to_reset, "237095"):
+                if student_to_reset and st.button("🔄 重置密码", key="reset_btn"):
+                    success, msg = student_manager.reset_student_password(student_to_reset)
+                    if success:
                         st.success(f"已重置 {student_to_reset} 的密码为: 237095")
                         st.rerun()
                     else:
-                        st.error("重置失败")
+                        st.error(msg)
         else:
             st.info("暂无学生数据")
     
@@ -95,6 +107,8 @@ def show_admin_panel():
                 new_name = st.text_input("姓名 *", placeholder="例: 张三")
             with col2:
                 new_password = st.text_input("密码", placeholder="默认为 237095", value="237095")
+                new_class = st.text_input("班级", placeholder="例: 计算机1班")
+                new_phone = st.text_input("手机号", placeholder="例: 13800138006")
             
             submitted = st.form_submit_button("➕ 添加学生", use_container_width=True)
             
@@ -102,18 +116,15 @@ def show_admin_panel():
                 if not new_student_id or not new_name:
                     st.error("请填写学号和姓名")
                 else:
-                    success = add_student(new_student_id, new_name, new_password)
+                    success, msg = student_manager.add_student(
+                        student_id=new_student_id,
+                        name=new_name,
+                        password=new_password,
+                        phone=new_phone,
+                        class_name=new_class
+                    )
                     if success:
                         st.success(f"成功添加学生: {new_name} (学号: {new_student_id}, 密码: {new_password})")
                         st.rerun()
                     else:
-                        st.error("添加失败，学号可能已存在")
-    
-    # ========== 操作日志 ==========
-    with tab3:
-        st.markdown("### 操作日志")
-        st.info("日志功能开发中...")
-
-def is_admin():
-    """检查当前用户是否为管理员"""
-    return st.session_state.get("user_role") == "admin"
+                        st.error(msg)
