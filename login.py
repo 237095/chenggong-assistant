@@ -6,7 +6,51 @@
 import streamlit as st
 import hashlib
 from datetime import datetime
+# 在 login.py 顶部添加导入
+import rag_search
 
+def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, enable_rag=True):
+    """调用 DeepSeek API - 支持 RAG 检索增强"""
+    
+    system_prompt = get_system_prompt(persona_key)
+    
+    # 获取用户最新问题
+    user_query = messages[-1]["content"] if messages else ""
+    
+    # RAG 检索
+    rag_context = ""
+    if enable_rag and user_query:
+        similar_docs = rag_search.search_similar_documents(user_query, match_count=3)
+        if similar_docs:
+            rag_context = "\n\n📚 **学校官方参考资料**：\n\n"
+            for i, doc in enumerate(similar_docs, 1):
+                rag_context += f"【{doc.get('title', '文档')}】\n{doc.get('content', '')[:500]}...\n\n"
+    
+    full_messages = [{"role": "system", "content": system_prompt}]
+    
+    if use_thinking:
+        full_messages.append({"role": "user", "content": "请先展示你的💭思考过程，再给出最终答案。"})
+    
+    if search_context:
+        full_messages.append({"role": "user", "content": f"🌐 联网搜索结果：\n{search_context}"})
+    
+    if rag_context:
+        full_messages.append({"role": "user", "content": f"📖 学校官方资料：\n{rag_context}"})
+    
+    full_messages.extend(messages)
+    
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=full_messages,
+            temperature=0.7,
+            max_tokens=2000,
+            timeout=30
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"API调用失败: {e}")
+        return None
 # 导入学生数据
 try:
     from students_id import STUDENTS
