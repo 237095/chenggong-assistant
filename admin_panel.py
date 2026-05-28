@@ -8,14 +8,10 @@ import student_manager
 import load_docs
 
 def show_admin_panel():
-    """显示管理员后台"""
-    
     st.markdown("## 🔧 管理后台")
     
-    # 获取 supabase 客户端
     supabase = st.session_state.get("supabase", None)
     
-    # 统计卡片
     col1, col2, col3 = st.columns(3)
     with col1:
         student_count = student_manager.get_student_count()
@@ -35,16 +31,13 @@ def show_admin_panel():
     
     st.markdown("---")
     
-    # 标签页
     tab1, tab2, tab3, tab4 = st.tabs(["📋 学生管理", "➕ 添加学生", "📜 操作日志", "📚 文档管理"])
     
-    # ========== 学生管理 ==========
     with tab1:
         st.markdown("### 学生列表")
         
         students = student_manager.get_all_students()
         if students:
-            # 转换为DataFrame显示
             data = []
             for s in students:
                 data.append({
@@ -59,8 +52,6 @@ def show_admin_panel():
             st.dataframe(df, use_container_width=True)
             
             st.markdown("---")
-            
-            # 删除学生
             st.markdown("### 删除学生")
             col1, col2 = st.columns([3, 1])
             with col1:
@@ -84,7 +75,6 @@ def show_admin_panel():
                     else:
                         st.error(msg)
             
-            # 重置密码
             st.markdown("### 重置学生密码")
             col1, col2 = st.columns([3, 1])
             with col1:
@@ -110,7 +100,6 @@ def show_admin_panel():
         else:
             st.info("暂无学生数据")
     
-    # ========== 添加学生 ==========
     with tab2:
         st.markdown("### 添加新学生")
         
@@ -143,12 +132,10 @@ def show_admin_panel():
                     else:
                         st.error(msg)
     
-    # ========== 操作日志 ==========
     with tab3:
         st.markdown("### 操作日志")
         st.info("日志功能开发中...")
     
-    # ========== 文档管理 ==========
     with tab4:
         st.markdown("### 📚 知识库文档管理")
         
@@ -156,7 +143,6 @@ def show_admin_panel():
             st.error("❌ Supabase 连接失败，请检查配置")
             return
         
-        # 显示当前文档数量
         try:
             response = supabase.table("documents").select("id", count="exact").execute()
             doc_count = response.count if response.count else 0
@@ -170,7 +156,6 @@ def show_admin_panel():
         with col1:
             if st.button("🔄 重新加载所有文档", use_container_width=True):
                 with st.spinner("正在重新加载..."):
-                    import load_docs
                     load_docs.load_documents(supabase)
                     st.rerun()
         
@@ -186,7 +171,6 @@ def show_admin_panel():
         
         st.markdown("---")
         
-        # 显示文档列表
         with st.expander("📋 查看文档列表"):
             try:
                 response = supabase.table("documents").select("title, category").order("title").execute()
@@ -201,5 +185,4 @@ def show_admin_panel():
         st.info("💡 提示：点击「重新加载所有文档」会清空现有文档并从 DOCS 文件夹重新加载。")
 
 def is_admin():
-    """检查当前用户是否为管理员"""
     return st.session_state.get("user_role") == "admin"
