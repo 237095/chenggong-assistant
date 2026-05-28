@@ -414,10 +414,8 @@ def search_online(query, max_results=2):
 def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, rag_context=None):
     """调用DeepSeek API - 支持RAG上下文"""
     
-    # 调试：打印 rag_context
     if rag_context:
         st.write(f"📚 rag_context 长度: {len(rag_context)}")
-        st.write(f"📚 rag_context 前300字符: {rag_context[:300]}")
     
     system_prompt = get_system_prompt(persona_key)
     
@@ -434,7 +432,6 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
     
     full_messages.extend(messages)
     
-    # 打印发送的消息数量
     st.write(f"📤 发送给API的消息数量: {len(full_messages)}")
     
     try:
@@ -445,8 +442,18 @@ def call_deepseek(messages, persona_key, use_thinking=False, search_context=None
             max_tokens=2000,
             timeout=60
         )
-        st.success("✅ API 调用成功")
-        return response.choices[0].message.content
+        
+        # 打印原始返回内容
+        result = response.choices[0].message.content
+        st.write(f"📥 API返回内容长度: {len(result)}")
+        st.write(f"📥 API返回内容前200字符: {result[:200] if result else '空'}")
+        
+        if result:
+            st.success("✅ API 调用成功")
+            return result
+        else:
+            st.error("❌ API 返回内容为空")
+            return None
     except Exception as e:
         st.error(f"❌ API调用失败: {e}")
         return None
