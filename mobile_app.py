@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 # 尝试导入联网搜索
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
