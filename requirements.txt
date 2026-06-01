@@ -1,12 +1,11 @@
-streamlit
-openai
+streamlit>=1.32.0
+openai>=1.0.0
 pandas
 pillow
 beautifulsoup4
 requests
 duckduckgo-search
 user-agents
-supabase
+supabase>=2.5.8
 python-dotenv
-openai>=1.0.0
 tiktoken
