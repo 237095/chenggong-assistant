@@ -70,9 +70,7 @@ def get_supabase_client():
     """从 session_state 获取 Supabase 客户端"""
     return st.session_state.get("supabase", None)
 
-# ========== RAG 文档检索功能 ==========
 def search_school_documents(query: str, limit: int = 5) -> str:
-    """从 Supabase documents 表中搜索相关学校文档"""
     supabase = get_supabase_client()
     if not supabase:
         st.warning("⚠️ Supabase 客户端未就绪")
@@ -85,19 +83,52 @@ def search_school_documents(query: str, limit: int = 5) -> str:
         count_resp = supabase.table("documents").select("id", count="exact").execute()
         st.write(f"📊 数据库中共有 {count_resp.count} 个文档")
         
-        # 方法1：搜索内容
-        response = supabase.table("documents")\
-            .select("title, category, content")\
-            .ilike("content", f"%{query}%")\
-            .limit(limit)\
-            .execute()
+        # ========== 改进：拆分关键词进行搜索 ==========
+        # 去掉常见停用词，提取关键词
+        stopwords = ['怎么', '如何', '什么', '哪里', '哪个', '为什么', '的', '了', '吗', '呢', '吧']
+        keywords = []
+        for word in stopwords:
+            query = query.replace(word, ' ')
         
-        # 方法2：如果内容搜索不到，搜索标题
+        # 提取2-4字的关键词
+        words = query.split()
+        for w in words:
+            if len(w) >= 2:
+                keywords.append(w)
+        
+        # 如果没有关键词，用原查询
+        if not keywords:
+            keywords = [query[:4]]
+        
+        st.write(f"🔑 提取关键词: {keywords}")
+        
+        # 构建 OR 条件搜索
+        # 方法1：使用 OR 条件（更精确）
+        if len(keywords) >= 2:
+            # 用任意关键词匹配
+            condition = f"content ILIKE '%{keywords[0]}%'"
+            for kw in keywords[1:]:
+                condition += f" OR content ILIKE '%{kw}%'"
+            
+            response = supabase.table("documents")\
+                .select("title, category, content")\
+                .or_(condition)\
+                .limit(limit)\
+                .execute()
+        else:
+            # 单个关键词
+            response = supabase.table("documents")\
+                .select("title, category, content")\
+                .ilike("content", f"%{keywords[0]}%")\
+                .limit(limit)\
+                .execute()
+        
+        # 如果还是搜不到，尝试搜索标题
         if not response.data or len(response.data) == 0:
             st.write("🔍 内容搜索无结果，尝试搜索标题...")
             response = supabase.table("documents")\
                 .select("title, category, content")\
-                .ilike("title", f"%{query}%")\
+                .ilike("title", f"%{query[:6]}%")\
                 .limit(limit)\
                 .execute()
         
@@ -122,7 +153,8 @@ def search_school_documents(query: str, limit: int = 5) -> str:
                 st.write("📋 数据库中的文档示例：")
                 for doc in sample.data:
                     st.write(f"   - {doc.get('title', '无标题')}")
-        return ""
+            return ""
+            
     except Exception as e:
         st.error(f"文档搜索失败: {e}")
         return ""
