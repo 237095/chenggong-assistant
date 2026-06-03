@@ -23,7 +23,7 @@ except ImportError:
 # ========== 配置 ==========
 # 从 Secrets 读取 API Key
 DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
-# 新增：从 session_state 或 secrets 读取 Dify API Key
+# 从 session_state 读取 Dify API Key
 DIFY_API_KEY = st.secrets.get("DIFY_API_KEY", "") or st.session_state.get("dify_api_key", "")
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
@@ -380,9 +380,9 @@ def get_local_answer(question):
             return answer
     return None
 
-# ========== 核心回复函数（已禁用 Supabase RAG）==========
+# ========== 核心回复函数 ==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
-    """核心回复函数 - 优先使用 Dify，禁用 Supabase RAG"""
+    """核心回复函数 - 优先使用 Dify"""
     
     lower = user_input.lower()
     
@@ -459,11 +459,6 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     # 普通问答
     else:
         conv_id = st.session_state.get("dify_conv_id", "")
-        
-        # 【已禁用】不再使用 Supabase RAG 检索
-        # rag_context = search_school_documents(user_input, limit=3)
-        
-        # 直接调用 Dify，rag_context 传空字符串
         answer, new_conv_id = call_ai_with_dify(user_input, conv_id, "")
         
         if new_conv_id:
@@ -472,7 +467,6 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         if answer:
             return answer
         
-        # 降级到本地知识库
         local = get_local_answer(user_input)
         if local:
             st.info("📖 使用本地知识库")
