@@ -395,11 +395,6 @@ def call_ai_with_dify(user_input, conversation_id=""):
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
     """核心回复函数 - 优先使用 Dify"""
     
-    # 强制在页面上显示调试信息
-    st.error("🚀 调试：进入了 get_ai_response 函数")
-    st.write(f"DIFY_API_KEY 是否存在: {bool(DIFY_API_KEY)}")
-    st.write(f"DIFY_API_KEY 值: {DIFY_API_KEY[:20] if DIFY_API_KEY else '未配置'}...")
-    
     lower = user_input.lower()
     
     # 百度热点查询
