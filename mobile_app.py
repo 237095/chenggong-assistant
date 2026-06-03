@@ -1,5 +1,5 @@
 """
-成工职小助手 - 手机端（RAG增强版）
+成工职小助手 - 手机端（Dify增强版）
 成都工业职业技术学院 | 三位学长学姐为你服务
 """
 
@@ -31,9 +31,14 @@ except ImportError:
 DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
+# ========== 新增：Dify 配置 ==========
+DIFY_API_KEY = st.secrets.get("DIFY_API_KEY", "") or st.session_state.get("dify_api_key", "")
+DIFY_API_URL = "https://api.dify.ai/v1/chat-messages"
+
 if not DEEPSEEK_API_KEY:
     st.error("请先在 Secrets 中配置 DEEPSEEK_API_KEY")
     st.stop()
+
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url=DEEPSEEK_BASE_URL
@@ -310,9 +315,37 @@ def search_online(query, max_results=2):
     except:
         return None
 
-# ========== AI 调用（支持RAG上下文）==========
-def call_deepseek(messages, persona_key, use_thinking, search_context, rag_context=None):
-    """调用DeepSeek API - 支持RAG上下文"""
+# ========== 【新增】Dify API 调用 ==========
+def call_dify_api(query: str, conversation_id: str = "") -> tuple:
+    """调用 Dify 的对话 API"""
+    if not DIFY_API_KEY:
+        return None, ""
+    
+    headers = {
+        "Authorization": f"Bearer {DIFY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "inputs": {},
+        "query": query,
+        "response_mode": "blocking",
+        "conversation_id": conversation_id,
+        "user": st.session_state.get("user_student_id", "anonymous")
+    }
+    
+    try:
+        response = requests.post(DIFY_API_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("answer", ""), data.get("conversation_id", "")
+    except Exception as e:
+        print(f"Dify API 调用失败: {e}")
+        return None, conversation_id
+
+# ========== 【修改】原来的 call_deepseek 重命名，保留原逻辑 ==========
+def call_deepseek_original(messages, persona_key, use_thinking, search_context, rag_context=None):
+    """原来的 DeepSeek API 调用逻辑（保留作为降级）"""
     system_prompt = get_system_prompt(persona_key)
     
     full = [{"role": "system", "content": system_prompt}]
@@ -338,10 +371,29 @@ def call_deepseek(messages, persona_key, use_thinking, search_context, rag_conte
         )
         return r.choices[0].message.content
     except Exception as e:
-        print(f"API调用失败: {e}")
+        print(f"DeepSeek API调用失败: {e}")
         return None
 
-# ========== 回复函数（支持RAG检索）==========
+# ========== 【新增】带降级的 AI 调用 ==========
+def call_ai_with_fallback(user_input, persona_key, enable_thinking, search_context, rag_context):
+    """优先使用 Dify，失败则降级到原来的 DeepSeek 调用"""
+    # 1. 优先尝试 Dify
+    conv_id = st.session_state.get("dify_conv_id", "")
+    dify_answer, new_conv_id = call_dify_api(user_input, conv_id)
+    
+    if new_conv_id:
+        st.session_state.dify_conv_id = new_conv_id
+    
+    if dify_answer:
+        return dify_answer
+    
+    # 2. 降级：使用原来的 DeepSeek 调用
+    # 需要构造 messages 格式
+    history = st.session_state.messages[-10:] if len(st.session_state.messages) > 10 else st.session_state.messages
+    msgs = [{"role": m["role"], "content": m["content"]} for m in history if m["role"] != "system"]
+    return call_deepseek_original(msgs, persona_key, enable_thinking, search_context, rag_context)
+
+# ========== 回复函数（支持 Dify 优先，RAG 降级）==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     lower = user_input.lower()
     
@@ -366,9 +418,9 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
             return "📢 最新通知：\n\n" + "\n".join([f"• {n}" for n in news])
         return f"📢 [查看通知公告]({SCHOOL_OFFICIAL_URL}/xwzx/tzgg.htm)"
     
-    # ========== RAG 检索学校文档 ==========
+    # ========== RAG 检索学校文档（降级备用） ==========
     rag_context = search_school_documents(user_input, limit=3)
-    print(f"RAG检索结果长度: {len(rag_context)}")  # 添加这行
+    
     # 联网搜索（如果开启）
     search_ctx = None
     if enable_search and SEARCH_AVAILABLE:
@@ -380,15 +432,13 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
         except:
             pass
     
-    # 调用AI（带RAG上下文）
-    history = st.session_state.messages[-10:] if len(st.session_state.messages) > 10 else st.session_state.messages
-    msgs = [{"role": m["role"], "content": m["content"]} for m in history if m["role"] != "system"]
-    resp = call_deepseek(msgs, persona_key, enable_thinking, search_ctx, rag_context)
+    # ========== 【核心修改】调用带降级的 AI ==========
+    resp = call_ai_with_fallback(user_input, persona_key, enable_thinking, search_ctx, rag_context)
     
     if resp:
         return resp
     
-    # 备用：本地知识库
+    # 最终备用：本地知识库
     local_again = get_local_answer(user_input)
     if local_again:
         return local_again
@@ -401,6 +451,9 @@ if "messages" not in st.session_state:
     st.session_state.enable_thinking = False
     st.session_state.enable_search = False
     st.session_state.show_settings = False
+    # 新增：Dify 会话 ID
+    if "dify_conv_id" not in st.session_state:
+        st.session_state.dify_conv_id = ""
     
     welcome_msg = """👋 **你好！我是成工职小助手**
 
@@ -422,7 +475,7 @@ if "messages" not in st.session_state:
     
     st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
 
-# ========== 自定义CSS（移动端优化 - 带折叠按钮）==========
+# ========== 自定义CSS（移动端优化）==========
 st.markdown(f"""
 <style>
     /* 隐藏默认元素 */
@@ -481,25 +534,6 @@ st.markdown(f"""
         color: rgba(255,255,255,0.85);
         margin: 2px 0 0 0;
         font-size: 0.65rem;
-    }}
-    
-    /* 折叠设置按钮 - 固定在顶部右侧 */
-    .settings-toggle-btn {{
-        background: rgba(255,255,255,0.2);
-        border: none;
-        border-radius: 30px;
-        padding: 6px 12px;
-        color: white;
-        font-size: 0.75rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.2s;
-    }}
-    .settings-toggle-btn:active {{
-        background: rgba(255,255,255,0.35);
-        transform: scale(0.96);
     }}
     
     /* 快捷按钮网格 - 3x3布局 */
@@ -665,7 +699,7 @@ function sendMsg(msg) {{
 </script>
 """, unsafe_allow_html=True)
 
-# ========== 显示历史消息（限制显示数量）==========
+# ========== 显示历史消息 ==========
 MAX_DISPLAY_MESSAGES = 15
 display_messages = st.session_state.messages[-MAX_DISPLAY_MESSAGES:] if len(st.session_state.messages) > MAX_DISPLAY_MESSAGES else st.session_state.messages
 
@@ -673,7 +707,7 @@ for msg in display_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ========== 折叠设置面板（使用Streamlit原生expander）==========
+# ========== 折叠设置面板 ==========
 with st.expander("⚙️ 设置与工具", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
@@ -693,6 +727,7 @@ with st.expander("⚙️ 设置与工具", expanded=False):
     
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.dify_conv_id = ""
         st.rerun()
     
     st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
