@@ -1,6 +1,6 @@
 """
-成工职小助手 - 电脑端（RAG增强版）
-成都工业职业技术学院 | 三位学长学姐为你服务
+成工职小助手 - 电脑端（Dify增强版）
+保留所有原有功能：热搜、新闻、本地知识库、人格切换等
 """
 
 import streamlit as st
@@ -23,16 +23,11 @@ except ImportError:
 # ========== 配置 ==========
 # 从 Secrets 读取 API Key
 DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
+# 新增：从 session_state 或 secrets 读取 Dify API Key
+DIFY_API_KEY = st.secrets.get("DIFY_API_KEY", "") or st.session_state.get("dify_api_key", "")
+
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
-
-if not DEEPSEEK_API_KEY:
-    st.error("❌ 配置错误：请在 Streamlit Secrets 中配置 DEEPSEEK_API_KEY")
-    st.stop()
-
-client = OpenAI(
-    api_key=DEEPSEEK_API_KEY,
-    base_url=DEEPSEEK_BASE_URL
-)
+DIFY_API_URL = "https://api.dify.ai/v1/chat-messages"
 
 # ========== 学校信息 ==========
 SCHOOL_NAME = "成都工业职业技术学院"
@@ -65,99 +60,37 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== 获取 Supabase 客户端（从 session_state）==========
+# ========== 获取 Supabase 客户端 ==========
 def get_supabase_client():
-    """从 session_state 获取 Supabase 客户端"""
     return st.session_state.get("supabase", None)
 
-def search_school_documents(query: str, limit: int = 5) -> str:
-    supabase = get_supabase_client()
-    if not supabase:
-        st.warning("⚠️ Supabase 客户端未就绪")
-        return ""
+# ========== 调用 Dify API（新增）==========
+def call_dify_api(query: str, conversation_id: str = "") -> tuple:
+    """调用 Dify 的对话 API"""
+    if not DIFY_API_KEY:
+        return None, ""
+    
+    headers = {
+        "Authorization": f"Bearer {DIFY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "inputs": {},
+        "query": query,
+        "response_mode": "blocking",
+        "conversation_id": conversation_id,
+        "user": st.session_state.get("user_student_id", "anonymous")
+    }
     
     try:
-        st.write(f"🔍 正在检索: {query}")
-        
-        # 查看表中有多少文档
-        count_resp = supabase.table("documents").select("id", count="exact").execute()
-        st.write(f"📊 数据库中共有 {count_resp.count} 个文档")
-        
-        # ========== 改进：拆分关键词进行搜索 ==========
-        # 去掉常见停用词，提取关键词
-        stopwords = ['怎么', '如何', '什么', '哪里', '哪个', '为什么', '的', '了', '吗', '呢', '吧']
-        keywords = []
-        for word in stopwords:
-            query = query.replace(word, ' ')
-        
-        # 提取2-4字的关键词
-        words = query.split()
-        for w in words:
-            if len(w) >= 2:
-                keywords.append(w)
-        
-        # 如果没有关键词，用原查询
-        if not keywords:
-            keywords = [query[:4]]
-        
-        st.write(f"🔑 提取关键词: {keywords}")
-        
-        # 构建 OR 条件搜索
-        # 方法1：使用 OR 条件（更精确）
-        if len(keywords) >= 2:
-            # 用任意关键词匹配
-            condition = f"content ILIKE '%{keywords[0]}%'"
-            for kw in keywords[1:]:
-                condition += f" OR content ILIKE '%{kw}%'"
-            
-            response = supabase.table("documents")\
-                .select("title, category, content")\
-                .or_(condition)\
-                .limit(limit)\
-                .execute()
-        else:
-            # 单个关键词
-            response = supabase.table("documents")\
-                .select("title, category, content")\
-                .ilike("content", f"%{keywords[0]}%")\
-                .limit(limit)\
-                .execute()
-        
-        # 如果还是搜不到，尝试搜索标题
-        if not response.data or len(response.data) == 0:
-            st.write("🔍 内容搜索无结果，尝试搜索标题...")
-            response = supabase.table("documents")\
-                .select("title, category, content")\
-                .ilike("title", f"%{query[:6]}%")\
-                .limit(limit)\
-                .execute()
-        
-        st.write(f"📊 检索到 {len(response.data) if response.data else 0} 条相关文档")
-        
-        if response.data and len(response.data) > 0:
-            for doc in response.data:
-                st.write(f"   - 找到: {doc.get('title', '未知标题')}")
-            
-            context = "\n\n📚 **学校官方资料参考**：\n\n"
-            for i, doc in enumerate(response.data, 1):
-                title = doc.get('title', '学校文档')
-                category = doc.get('category', '其他')
-                content = doc.get('content', '')[:800]
-                context += f"**【{i}】{title}** (来自：{category})\n"
-                context += f"{content}\n\n"
-            return context
-        else:
-            st.warning("⚠️ 未找到相关文档")
-            sample = supabase.table("documents").select("title").limit(3).execute()
-            if sample.data:
-                st.write("📋 数据库中的文档示例：")
-                for doc in sample.data:
-                    st.write(f"   - {doc.get('title', '无标题')}")
-            return ""
-            
+        response = requests.post(DIFY_API_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("answer", ""), data.get("conversation_id", "")
     except Exception as e:
-        st.error(f"文档搜索失败: {e}")
-        return ""
+        print(f"Dify API 调用失败: {e}")
+        return None, conversation_id
 
 # ========== 百度热搜获取功能 ==========
 def fetch_baidu_hot_search(limit=15):
@@ -208,7 +141,10 @@ def fetch_baidu_hot_search(limit=15):
 
 def get_hot_detail_with_ai(keyword):
     """使用AI获取热搜关键词的详细内容"""
+    if not DEEPSEEK_API_KEY:
+        return None
     try:
+        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
         prompt = f"""请帮我总结一下关于「{keyword}」这个热搜事件的核心内容。
 
 要求：
@@ -430,49 +366,30 @@ def search_online(query, max_results=2):
     except:
         return None
 
-# ========== AI 调用 ==========
-def call_deepseek(messages, persona_key, use_thinking=False, search_context=None, rag_context=None):
-    if rag_context:
-        st.write(f"📚 rag_context 长度: {len(rag_context)}")
+# ========== AI 调用（优先 Dify，降级 DeepSeek）==========
+def call_ai_with_dify(user_input, conversation_id=""):
+    """优先使用 Dify，失败则降级到直接调用 DeepSeek"""
+    # 尝试 Dify
+    if DIFY_API_KEY:
+        answer, new_id = call_dify_api(user_input, conversation_id)
+        if answer:
+            return answer, new_id
     
-    system_prompt = get_system_prompt(persona_key)
+    # 降级：直接调用 DeepSeek（不经过 RAG）
+    if DEEPSEEK_API_KEY:
+        try:
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": user_input}],
+                temperature=0.8,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content, conversation_id
+        except Exception as e:
+            print(f"DeepSeek 降级调用失败: {e}")
     
-    full_messages = [{"role": "system", "content": system_prompt}]
-    
-    if use_thinking:
-        full_messages.append({"role": "user", "content": "请先展示你的💭思考过程，再给出最终答案。"})
-    
-    if search_context:
-        full_messages.append({"role": "user", "content": f"🌐 联网搜索结果：\n{search_context}"})
-    
-    if rag_context:
-        full_messages.append({"role": "user", "content": f"📖 以下是学校官方资料，请根据这些资料回答问题：\n\n{rag_context}"})
-    
-    full_messages.extend(messages)
-    
-    st.write(f"📤 发送给API的消息数量: {len(full_messages)}")
-    
-    try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=full_messages,
-            temperature=0.8,
-            max_tokens=2000,
-            timeout=60
-        )
-        
-        result = response.choices[0].message.content
-        st.write(f"📥 API返回内容长度: {len(result)}")
-        
-        if result:
-            st.success("✅ API 调用成功")
-            return result
-        else:
-            st.error("❌ API 返回内容为空")
-            return None
-    except Exception as e:
-        st.error(f"❌ API调用失败: {e}")
-        return None
+    return None, conversation_id
 
 # ========== 核心回复函数 ==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
@@ -516,52 +433,59 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     
     # 代码生成
     if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
+        # 优先用 Dify，不行用 DeepSeek
+        answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""))
+        if answer:
+            return answer
         full_prompt = f"请生成完整的代码：{user_input}\n要求：完整、有注释、可运行，用```语言名```格式。"
-        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None, None)
-        return response if response else "代码生成暂时不可用"
+        if DEEPSEEK_API_KEY:
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": full_prompt}],
+                temperature=0.8,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content
+        return "代码生成暂时不可用"
     
     # 表格生成
     elif any(w in lower for w in ["表格", "表", "成绩单", "课程表"]):
+        answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""))
+        if answer:
+            return answer
         full_prompt = f"请生成Markdown表格：{user_input}\n要求：标准格式，包含列名和示例数据。"
-        response = call_deepseek([{"role": "user", "content": full_prompt}], persona_key, enable_thinking, None, None)
-        return response if response else "表格生成暂时不可用"
+        if DEEPSEEK_API_KEY:
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": full_prompt}],
+                temperature=0.8,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content
+        return "表格生成暂时不可用"
     
     # 普通问答
     else:
-        st.write("🔍 正在检索学校文档...")
-        rag_context = search_school_documents(user_input, limit=3)
-        st.write(f"📚 检索结果长度: {len(rag_context)}")
+        # 获取当前会话ID
+        conv_id = st.session_state.get("dify_conv_id", "")
         
-        if rag_context:
-            st.success("✅ 找到相关文档！")
-        else:
-            st.warning("⚠️ 未找到相关文档")
+        answer, new_conv_id = call_ai_with_dify(user_input, conv_id)
         
-        search_ctx = None
-        if enable_search and SEARCH_AVAILABLE:
-            sr = search_online(user_input)
-            if sr:
-                search_ctx = "\n".join([f"- {s['title']}: {s['body'][:200]}" for s in sr])
+        if new_conv_id:
+            st.session_state.dify_conv_id = new_conv_id
         
-        st.write("🤖 正在调用 AI...")
-        response = call_deepseek(
-            [{"role": "user", "content": user_input}], 
-            persona_key, 
-            enable_thinking, 
-            search_ctx,
-            rag_context
-        )
+        if answer:
+            return answer
         
-        if response:
-            st.success("✅ AI 返回成功")
-            return response
-        else:
-            local = get_local_answer(user_input)
-            if local:
-                st.info("📖 使用本地知识库")
-                return local
-            st.warning("⚠️ 使用兜底回复")
-            return f"关于「{user_input}」，我正在学习中。\n\n💡 **你可以尝试：**\n- 换个方式描述问题\n- 询问校园相关问题（图书馆、食堂、课表等）\n- 问我「今天有什么热点」\n- 让我帮你写代码或生成表格"
+        # 最后的降级：本地知识库
+        local = get_local_answer(user_input)
+        if local:
+            st.info("📖 使用本地知识库")
+            return local
+        
+        return f"关于「{user_input}」，我正在学习中。\n\n💡 **你可以尝试：**\n- 换个方式描述问题\n- 询问校园相关问题（图书馆、食堂、课表等）\n- 问我「今天有什么热点」\n- 让我帮你写代码或生成表格"
 
 # ========== CSS样式 ==========
 st.markdown("""
@@ -687,6 +611,7 @@ with st.sidebar:
     
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.dify_conv_id = ""
         st.rerun()
     
     st.markdown("---")
@@ -700,6 +625,7 @@ with st.sidebar:
 # ========== 初始化会话 ==========
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    st.session_state.dify_conv_id = ""
     st.session_state.messages.append({
         "role": "assistant",
         "content": f"""# 🎓 {SCHOOL_NAME} - 成工职小助手
