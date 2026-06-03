@@ -27,7 +27,7 @@ if "supabase" not in st.session_state:
 if "supabase_ok" not in st.session_state:
     st.session_state.supabase_ok = False
 
-# ========== 新增：Dify 相关状态 ==========
+# ========== Dify 相关状态 ==========
 if "dify_conv_id" not in st.session_state:
     st.session_state.dify_conv_id = ""
 if "dify_api_key" not in st.session_state:
@@ -55,13 +55,11 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：根据角色初始化不同的服务 ==========
-    
-    # 1. 读取 Dify API Key（所有用户都需要）
+    # ========== 读取 Dify API Key（所有用户都需要）==========
     if not st.session_state.dify_api_key:
         st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
     
-    # 2. 只有管理员才需要 Supabase（学生管理、文档管理）
+    # ========== 只有管理员才需要初始化 Supabase ==========
     if st.session_state.user_role == "admin" and not st.session_state.supabase_ok:
         try:
             SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
