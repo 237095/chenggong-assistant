@@ -395,13 +395,6 @@ def call_ai_with_dify(user_input, conversation_id=""):
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
     lower = user_input.lower()
     
-    def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
-    # 强制在页面上显示调试信息
-    import streamlit as st
-    st.error("🚀 调试：进入了 get_ai_response 函数")
-    st.write(f"DIFY_API_KEY 是否存在: {bool(DIFY_API_KEY)}")
-    # ... 原有代码
-    
     # 百度热点查询
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "热搜榜", "今日热点"]):
         with st.spinner("正在获取百度热搜..."):
