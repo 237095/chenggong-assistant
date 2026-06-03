@@ -20,14 +20,12 @@ if "user_student_id" not in st.session_state:
     st.session_state.user_student_id = None
 if "login_error" not in st.session_state:
     st.session_state.login_error = None
-if "docs_synced" not in st.session_state:
-    st.session_state.docs_synced = False
 if "supabase" not in st.session_state:
     st.session_state.supabase = None
 if "supabase_ok" not in st.session_state:
     st.session_state.supabase_ok = False
 
-# ========== 新增：Dify 相关状态 ==========
+# ========== Dify 相关状态 ==========
 if "dify_conv_id" not in st.session_state:
     st.session_state.dify_conv_id = ""
 if "dify_api_key" not in st.session_state:
@@ -55,21 +53,19 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：只有管理员才需要初始化 Supabase ==========
+    # ========== 已登录：只有管理员才需要初始化 Supabase（用于学生管理）==========
     if st.session_state.user_role == "admin" and not st.session_state.supabase_ok:
         try:
-            # 直接从 st.secrets 读取配置，如果缺失会抛出 KeyError，由 except 捕获处理
             SUPABASE_URL = st.secrets["SUPABASE_URL"]
             SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]
             st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
             st.session_state.supabase_ok = True
             
-            # 读取 Dify API Key（所有用户都需要，但只在管理员登录时统一读一次）
+            # 读取 Dify API Key
             st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
             
         except KeyError as e:
-            # 如果 Secrets 中缺少某个 Key，给出明确的提示，但不中断程序
-            st.warning(f"⚠️ Supabase 配置缺失（{e}），管理员功能可能不可用。请检查 Streamlit Cloud Secrets 配置。")
+            st.warning(f"⚠️ Supabase 配置缺失（{e}），管理员功能可能不可用")
             st.session_state.supabase = None
             st.session_state.supabase_ok = False
         except Exception as e:
@@ -81,18 +77,8 @@ def main():
         if not st.session_state.dify_api_key:
             st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
     
-    # ========== 同步文档（仅管理员且 Supabase 可用时）==========
-    if (st.session_state.user_role == "admin" and 
-        not st.session_state.docs_synced and 
-        st.session_state.supabase_ok):
-        try:
-            import load_docs
-            with st.spinner("📚 正在同步学校文档..."):
-                load_docs.load_documents(st.session_state.supabase)
-                st.session_state.docs_synced = True
-        except Exception as e:
-            st.warning(f"文档同步失败: {e}")
-            st.session_state.docs_synced = True
+    # ========== 【已移除】文档同步代码 - 不再需要加载文档到 Supabase ==========
+    # 因为现在使用 Dify 知识库，不需要同步文档到 Supabase
     
     # ========== 显示用户信息 ==========
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
