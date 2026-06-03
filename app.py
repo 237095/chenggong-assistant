@@ -27,6 +27,12 @@ if "supabase" not in st.session_state:
 if "supabase_ok" not in st.session_state:
     st.session_state.supabase_ok = False
 
+# ========== 新增：Dify 相关状态 ==========
+if "dify_conv_id" not in st.session_state:
+    st.session_state.dify_conv_id = ""
+if "dify_api_key" not in st.session_state:
+    st.session_state.dify_api_key = ""
+
 # ========== 页面配置 ==========
 if not st.session_state.logged_in:
     st.set_page_config(
@@ -49,13 +55,17 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：初始化 Supabase 客户端（只初始化一次）==========
+    # ========== 已登录：初始化 Supabase 客户端和 Dify Key ==========
     if not st.session_state.supabase_ok:
         try:
             SUPABASE_URL = st.secrets["SUPABASE_URL"]
             SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]
             st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
             st.session_state.supabase_ok = True
+            
+            # 新增：读取 Dify API Key
+            st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
+            
         except Exception as e:
             st.error(f"Supabase 初始化失败: {e}")
             st.session_state.supabase = None
