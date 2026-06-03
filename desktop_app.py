@@ -60,11 +60,11 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== 获取 Supabase 客户端 ==========
+# ========== 获取 Supabase 客户端（仅用于其他功能）==========
 def get_supabase_client():
     return st.session_state.get("supabase", None)
 
-# ========== 调用 Dify API（新增）==========
+# ========== 调用 Dify API ==========
 def call_dify_api(query: str, conversation_id: str = "") -> tuple:
     """调用 Dify 的对话 API"""
     if not DIFY_API_KEY:
@@ -91,6 +91,31 @@ def call_dify_api(query: str, conversation_id: str = "") -> tuple:
     except Exception as e:
         print(f"Dify API 调用失败: {e}")
         return None, conversation_id
+
+# ========== AI 调用（优先 Dify，降级 DeepSeek）==========
+def call_ai_with_dify(user_input, conversation_id, rag_context=""):
+    """优先使用 Dify，失败则降级到直接调用 DeepSeek"""
+    # 尝试 Dify
+    if DIFY_API_KEY:
+        answer, new_id = call_dify_api(user_input, conversation_id)
+        if answer:
+            return answer, new_id
+    
+    # 降级：直接调用 DeepSeek（不经过 RAG）
+    if DEEPSEEK_API_KEY:
+        try:
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": user_input}],
+                temperature=0.8,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content, conversation_id
+        except Exception as e:
+            print(f"DeepSeek 降级调用失败: {e}")
+    
+    return None, conversation_id
 
 # ========== 百度热搜获取功能 ==========
 def fetch_baidu_hot_search(limit=15):
@@ -355,45 +380,9 @@ def get_local_answer(question):
             return answer
     return None
 
-# ========== 联网搜索 ==========
-def search_online(query, max_results=2):
-    if not SEARCH_AVAILABLE:
-        return None
-    try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
-            return [{"title": r['title'], "body": r['body'][:300]} for r in results]
-    except:
-        return None
-
-# ========== AI 调用（优先 Dify，降级 DeepSeek）==========
-def call_ai_with_dify(user_input, conversation_id=""):
-    """优先使用 Dify，失败则降级到直接调用 DeepSeek"""
-    # 尝试 Dify
-    if DIFY_API_KEY:
-        answer, new_id = call_dify_api(user_input, conversation_id)
-        if answer:
-            return answer, new_id
-    
-    # 降级：直接调用 DeepSeek（不经过 RAG）
-    if DEEPSEEK_API_KEY:
-        try:
-            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[{"role": "user", "content": user_input}],
-                temperature=0.8,
-                max_tokens=2000
-            )
-            return response.choices[0].message.content, conversation_id
-        except Exception as e:
-            print(f"DeepSeek 降级调用失败: {e}")
-    
-    return None, conversation_id
-
-# ========== 核心回复函数 ==========
+# ========== 核心回复函数（已禁用 Supabase RAG）==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
-    """核心回复函数 - 优先使用 Dify"""
+    """核心回复函数 - 优先使用 Dify，禁用 Supabase RAG"""
     
     lower = user_input.lower()
     
@@ -435,7 +424,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     
     # 代码生成
     if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
-        answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""))
+        answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""), "")
         if answer:
             return answer
         full_prompt = f"请生成完整的代码：{user_input}\n要求：完整、有注释、可运行，用```语言名```格式。"
@@ -452,7 +441,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     
     # 表格生成
     elif any(w in lower for w in ["表格", "表", "成绩单", "课程表"]):
-        answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""))
+        answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""), "")
         if answer:
             return answer
         full_prompt = f"请生成Markdown表格：{user_input}\n要求：标准格式，包含列名和示例数据。"
@@ -470,7 +459,12 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     # 普通问答
     else:
         conv_id = st.session_state.get("dify_conv_id", "")
-        answer, new_conv_id = call_ai_with_dify(user_input, conv_id)
+        
+        # 【已禁用】不再使用 Supabase RAG 检索
+        # rag_context = search_school_documents(user_input, limit=3)
+        
+        # 直接调用 Dify，rag_context 传空字符串
+        answer, new_conv_id = call_ai_with_dify(user_input, conv_id, "")
         
         if new_conv_id:
             st.session_state.dify_conv_id = new_conv_id
@@ -478,6 +472,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         if answer:
             return answer
         
+        # 降级到本地知识库
         local = get_local_answer(user_input)
         if local:
             st.info("📖 使用本地知识库")
