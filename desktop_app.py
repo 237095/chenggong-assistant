@@ -393,14 +393,14 @@ def call_ai_with_dify(user_input, conversation_id=""):
 
 # ========== 核心回复函数 ==========
 def get_ai_response(user_input, persona_key, enable_thinking, enable_search, enable_hot_summary=False):
-    lower = user_input.lower()
+    """核心回复函数 - 优先使用 Dify"""
     
-    def get_ai_response(user_input, persona_key, enable_thinking, enable_search):
     # 强制在页面上显示调试信息
-    import streamlit as st
     st.error("🚀 调试：进入了 get_ai_response 函数")
     st.write(f"DIFY_API_KEY 是否存在: {bool(DIFY_API_KEY)}")
-    # ... 原有代码
+    st.write(f"DIFY_API_KEY 值: {DIFY_API_KEY[:20] if DIFY_API_KEY else '未配置'}...")
+    
+    lower = user_input.lower()
     
     # 百度热点查询
     if any(word in lower for word in ["热点", "热搜", "百度热搜", "热门", "今天有什么热点", "热搜榜", "今日热点"]):
@@ -440,7 +440,6 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     
     # 代码生成
     if any(w in lower for w in ["python", "java", "html", "代码", "写一个", "编程", "计算器"]):
-        # 优先用 Dify，不行用 DeepSeek
         answer, _ = call_ai_with_dify(user_input, st.session_state.get("dify_conv_id", ""))
         if answer:
             return answer
@@ -475,9 +474,7 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
     
     # 普通问答
     else:
-        # 获取当前会话ID
         conv_id = st.session_state.get("dify_conv_id", "")
-        
         answer, new_conv_id = call_ai_with_dify(user_input, conv_id)
         
         if new_conv_id:
@@ -486,7 +483,6 @@ def get_ai_response(user_input, persona_key, enable_thinking, enable_search, ena
         if answer:
             return answer
         
-        # 最后的降级：本地知识库
         local = get_local_answer(user_input)
         if local:
             st.info("📖 使用本地知识库")
