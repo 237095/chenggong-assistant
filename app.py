@@ -20,6 +20,8 @@ if "user_student_id" not in st.session_state:
     st.session_state.user_student_id = None
 if "login_error" not in st.session_state:
     st.session_state.login_error = None
+if "docs_synced" not in st.session_state:
+    st.session_state.docs_synced = False
 if "supabase" not in st.session_state:
     st.session_state.supabase = None
 if "supabase_ok" not in st.session_state:
@@ -53,32 +55,41 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 已登录：只有管理员才需要初始化 Supabase（用于学生管理）==========
-    if st.session_state.user_role == "admin" and not st.session_state.supabase_ok:
-        try:
-            SUPABASE_URL = st.secrets["SUPABASE_URL"]
-            SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]
-            st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-            st.session_state.supabase_ok = True
-            
-            # 读取 Dify API Key
-            st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
-            
-        except KeyError as e:
-            st.warning(f"⚠️ Supabase 配置缺失（{e}），管理员功能可能不可用")
-            st.session_state.supabase = None
-            st.session_state.supabase_ok = False
-        except Exception as e:
-            st.error(f"Supabase 初始化失败: {e}")
-            st.session_state.supabase = None
-            st.session_state.supabase_ok = False
-    else:
-        # 对于非管理员用户，只读取 Dify API Key
-        if not st.session_state.dify_api_key:
-            st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
+    # ========== 读取 Dify API Key（所有用户都需要）==========
+    if not st.session_state.dify_api_key:
+        st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
     
-    # ========== 【已移除】文档同步代码 - 不再需要加载文档到 Supabase ==========
-    # 因为现在使用 Dify 知识库，不需要同步文档到 Supabase
+    # ========== 【关键修改】只有管理员才初始化 Supabase ==========
+    if st.session_state.user_role == "admin":
+        if not st.session_state.supabase_ok:
+            try:
+                SUPABASE_URL = st.secrets["SUPABASE_URL"]
+                SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]
+                st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+                st.session_state.supabase_ok = True
+            except KeyError as e:
+                st.warning(f"⚠️ Supabase 配置缺失（{e}），管理员功能可能不可用")
+                st.session_state.supabase = None
+                st.session_state.supabase_ok = False
+            except Exception as e:
+                st.error(f"Supabase 初始化失败: {e}")
+                st.session_state.supabase = None
+                st.session_state.supabase_ok = False
+        # 管理员：同步文档（如果需要）
+        if not st.session_state.docs_synced and st.session_state.supabase_ok:
+            try:
+                import load_docs
+                with st.spinner("📚 正在同步学校文档..."):
+                    load_docs.load_documents(st.session_state.supabase)
+                    st.session_state.docs_synced = True
+            except Exception as e:
+                st.warning(f"文档同步失败: {e}")
+                st.session_state.docs_synced = True
+    else:
+        # ========== 学生用户：确保 Supabase 状态为 False，不触发任何连接 ==========
+        st.session_state.supabase_ok = False
+        st.session_state.supabase = None
+        st.session_state.docs_synced = True  # 跳过文档同步
     
     # ========== 显示用户信息 ==========
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
