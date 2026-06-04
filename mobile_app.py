@@ -5,6 +5,7 @@
 
 import streamlit as st
 import os
+import re  # 新增：用于过滤 <think> 标签
 from openai import OpenAI
 from datetime import datetime
 import base64
@@ -74,7 +75,7 @@ if LOGO_PATH and os.path.exists(LOGO_PATH):
     except:
         pass
 
-# ========== RAG 文档检索功能 ==========
+# ========== RAG 文档检索功能（降级备用）==========
 
 def init_supabase():
     """初始化 Supabase 客户端"""
@@ -338,7 +339,18 @@ def call_dify_api(query: str, conversation_id: str = "") -> tuple:
         response = requests.post(DIFY_API_URL, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
         data = response.json()
-        return data.get("answer", ""), data.get("conversation_id", "")
+        answer = data.get("answer", "")
+        
+        # ========== 过滤 <think> 标签 ==========
+        if answer:
+            # 移除 <think>...</think> 标签及其内容
+            answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
+            # 移除 <thought>...</thought> 标签（如果有）
+            answer = re.sub(r'<thought>.*?</thought>', '', answer, flags=re.DOTALL)
+            # 移除多余的换行
+            answer = answer.strip()
+        
+        return answer, data.get("conversation_id", "")
     except Exception as e:
         print(f"Dify API 调用失败: {e}")
         return None, conversation_id
@@ -749,6 +761,11 @@ if user_input and user_input.strip():
                 st.session_state.enable_thinking, 
                 st.session_state.enable_search
             )
+            
+            # 再次过滤确保没有 <think> 标签
+            if response:
+                response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+                response = response.strip()
             
             # 热点查询不加人格前缀
             is_hot = any(word in user_input.lower() for word in ["热点", "热搜", "今日热点"])
