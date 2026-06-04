@@ -47,6 +47,28 @@ else:
         layout="wide"
     )
 
+# ========== 【关键】在任何页面逻辑之前初始化 Supabase ==========
+# 这样登录页面也能使用 Supabase 验证
+if not st.session_state.supabase_ok:
+    try:
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY", "")
+        
+        if SUPABASE_URL and SUPABASE_KEY:
+            st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            st.session_state.supabase_ok = True
+            print("✅ Supabase 初始化成功")
+        else:
+            print("⚠️ Supabase 配置缺失")
+            st.session_state.supabase_ok = False
+    except Exception as e:
+        print(f"❌ Supabase 初始化失败: {e}")
+        st.session_state.supabase_ok = False
+
+# ========== 读取 Dify API Key ==========
+if not st.session_state.dify_api_key:
+    st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
+
 # ========== 主逻辑 ==========
 def main():
     # 未登录：显示登录页面
@@ -54,26 +76,6 @@ def main():
         import login
         login.show_login_page()
         return
-    
-    # ========== 已登录：初始化 Supabase（所有用户都需要，用于登录验证）==========
-    if not st.session_state.supabase_ok:
-        try:
-            SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-            SUPABASE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY", "")
-            
-            if SUPABASE_URL and SUPABASE_KEY:
-                st.session_state.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-                st.session_state.supabase_ok = True
-            else:
-                st.warning("⚠️ Supabase 配置缺失，部分功能可能不可用")
-                st.session_state.supabase_ok = False
-        except Exception as e:
-            st.error(f"Supabase 初始化失败: {e}")
-            st.session_state.supabase_ok = False
-    
-    # ========== 读取 Dify API Key ==========
-    if not st.session_state.dify_api_key:
-        st.session_state.dify_api_key = st.secrets.get("DIFY_API_KEY", "")
     
     # ========== 同步文档（仅管理员且 Supabase 可用时）==========
     if (st.session_state.user_role == "admin" and 
