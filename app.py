@@ -77,18 +77,10 @@ def main():
         login.show_login_page()
         return
     
-    # ========== 同步文档（仅管理员且 Supabase 可用时）==========
-    if (st.session_state.user_role == "admin" and 
-        not st.session_state.docs_synced and 
-        st.session_state.supabase_ok):
-        try:
-            import load_docs
-            with st.spinner("📚 正在同步学校文档..."):
-                load_docs.load_documents(st.session_state.supabase)
-                st.session_state.docs_synced = True
-        except Exception as e:
-            st.warning(f"文档同步失败: {e}")
-            st.session_state.docs_synced = True
+    # ========== 文档同步已禁用（改用 Dify 知识库）==========
+    # 直接标记为已同步，跳过
+    if not st.session_state.docs_synced:
+        st.session_state.docs_synced = True
     
     # ========== 显示用户信息 ==========
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
